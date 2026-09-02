@@ -1,4 +1,5 @@
 const std = @import("std");
+const json = std.json;
 
 const AstTypeTag = enum { builtin, ref, set, option, class, @"enum", map, record };
 
@@ -26,14 +27,28 @@ pub fn main(init: std.process.Init) !void {
 
     // First args is the name of the binary, skip it
     _ = args.next();
-
     const fname = if (args.next()) |arg| arg else return error.NameIsMissing;
 
     // read the file
-    var buffer: [4096]u8 = undefined;
-    const contents = try std.Io.Dir.readFile(std.Io.Dir.cwd(), init.io, fname, &buffer);
-    var tok = std.mem.tokenizeSequence(u8, contents, "\n");
-    while (tok.next()) |line| {
-        std.debug.print("line: {s}", .{line});
+    const contents = try std.Io.Dir.readFileAlloc(
+        std.Io.Dir.cwd(),
+        init.io,
+        fname,
+        init.gpa,
+        std.Io.Limit.unlimited,
+    );
+    defer init.gpa.free(contents);
+
+    // parse the json
+    const parsed = try json.parseFromSlice(std.json.Value, init.gpa, contents, .{});
+    defer parsed.deinit();
+
+    // The top level JSON Value is one array.
+    // The array contains object that are objectMap.
+    for (parsed.value.array.items) |item| {
+        const object: std.json.ObjectMap = item.object;
+        if (object.get("name")) |name| {
+            std.debug.print("Object: {s}\n", .{name.string});
+        }
     }
 }
