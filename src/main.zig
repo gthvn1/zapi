@@ -1,7 +1,7 @@
 const std = @import("std");
 const json = std.json;
 
-const ast = @import("xapi_ast.zig");
+const raw_api = @import("raw_xapi.zig");
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
@@ -24,5 +24,6 @@ pub fn main(init: std.process.Init) !void {
     const parsed = try json.parseFromSlice(std.json.Value, init.gpa, contents, .{});
     defer parsed.deinit();
 
-    try ast.parse_api(parsed.value);
+    var rapi = try raw_api.init(init.gpa, parsed.value);
+    defer rapi.deinit(init.gpa);
 }

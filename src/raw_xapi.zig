@@ -1,9 +1,18 @@
+const Self = @This();
+
 const std = @import("std");
 const json = std.json;
 
-pub fn parse_api(root: std.json.Value) !void {
+pub const ClassInfo = struct {
+    name: []const u8,
+};
+
+root: std.ArrayList(ClassInfo),
+
+pub fn init(gpa: std.mem.Allocator, root: std.json.Value) !Self {
     // Just to know the size of struct passed on the stack
     std.debug.print("{d}\n", .{@sizeOf(std.json.Value)});
+    var array = std.ArrayList(ClassInfo).empty;
 
     var id: usize = 1;
     // The top level JSON Value is one array.
@@ -12,6 +21,7 @@ pub fn parse_api(root: std.json.Value) !void {
         .array => for (root.array.items) |item| {
             const object: std.json.ObjectMap = item.object;
             if (object.get("name")) |name| {
+                try array.append(gpa, ClassInfo{ .name = name.string });
                 std.debug.print(
                     "ClassInfo:\n{{\n  id: {d}, name: {s}\n",
                     .{ id, name.string },
@@ -30,6 +40,12 @@ pub fn parse_api(root: std.json.Value) !void {
         },
         else => return error.rootIsNotAnArray,
     }
+
+    return .{ .root = array };
+}
+
+pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
+    self.root.deinit(gpa);
 }
 
 // We are expecting an array
