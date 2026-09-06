@@ -49,19 +49,42 @@ pub fn main(init: std.process.Init) !void {
     for (parsed.value.array.items) |item| {
         const object: std.json.ObjectMap = item.object;
         if (object.get("name")) |name| {
-            std.debug.print("ClassInfo: {{ id: {d}, name: {s}", .{ id, name.string });
+            std.debug.print("ClassInfo:\n{{\tid: {d}, name: {s}\n", .{ id, name.string });
         } else return error.nameIsMissing;
         // all object should have a field that is an array
         if (object.get("fields")) |fields_array| {
-            _ = fields_array;
-            std.debug.print(", fields: ??", .{});
+            try parse_fields(fields_array);
         } else return error.fieldsIsMissing;
         // all object should have messages that is an array
         if (object.get("messages")) |messages_array| {
-            _ = messages_array;
-            std.debug.print(", messages: ??", .{});
+            try parse_messages(messages_array);
         } else return error.messagesIsMissing;
         std.debug.print("}}\n", .{});
         id += 1;
+    }
+}
+
+// We are expecting an array
+fn parse_fields(fields: std.json.Value) !void {
+    std.debug.print("\tfields:\n", .{});
+    for (fields.array.items) |item| {
+        const object: std.json.ObjectMap = item.object;
+        if (object.get("name")) |name| {
+            std.debug.print("\t\t({s}", .{name.string});
+        } else return error.fieldNameIsMissing;
+        if (object.get("type")) |ty| {
+            std.debug.print(", {s})\n", .{ty.string});
+        } else return error.fieldTypeIsMissing;
+    }
+}
+
+fn parse_messages(messages: std.json.Value) !void {
+    std.debug.print("\tmessages:\n", .{});
+    for (messages.array.items) |item| {
+        const object: std.json.ObjectMap = item.object;
+        if (object.get("name")) |name| {
+            std.debug.print("\t\t({s}", .{name.string});
+        } else return error.msgNameIsMissing;
+        std.debug.print(", todo params, todo result)\n", .{});
     }
 }
