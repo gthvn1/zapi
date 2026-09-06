@@ -43,12 +43,25 @@ pub fn main(init: std.process.Init) !void {
     const parsed = try json.parseFromSlice(std.json.Value, init.gpa, contents, .{});
     defer parsed.deinit();
 
+    var id: usize = 1;
     // The top level JSON Value is one array.
     // The array contains object that are objectMap.
     for (parsed.value.array.items) |item| {
         const object: std.json.ObjectMap = item.object;
         if (object.get("name")) |name| {
-            std.debug.print("Object: {s}\n", .{name.string});
-        }
+            std.debug.print("ClassInfo: {{ id: {d}, name: {s}", .{ id, name.string });
+        } else return error.nameIsMissing;
+        // all object should have a field that is an array
+        if (object.get("fields")) |fields_array| {
+            _ = fields_array;
+            std.debug.print(", fields: ??", .{});
+        } else return error.fieldsIsMissing;
+        // all object should have messages that is an array
+        if (object.get("messages")) |messages_array| {
+            _ = messages_array;
+            std.debug.print(", messages: ??", .{});
+        } else return error.messagesIsMissing;
+        std.debug.print("}}\n", .{});
+        id += 1;
     }
 }
