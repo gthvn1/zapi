@@ -10,7 +10,7 @@ pub fn main(init: std.process.Init) !void {
     _ = args.next();
     const fname = if (args.next()) |arg| arg else return error.NameIsMissing;
 
-    // read the file
+    // Read the file
     const contents = try std.Io.Dir.readFileAlloc(
         std.Io.Dir.cwd(),
         init.io,
@@ -20,10 +20,11 @@ pub fn main(init: std.process.Init) !void {
     );
     defer init.gpa.free(contents);
 
-    // parse the json
+    // 1. Parse the json.
     const parsed = try json.parseFromSlice(std.json.Value, init.gpa, contents, .{});
     defer parsed.deinit();
 
+    // 2. Extract parsed value into an intermediate representation.
     var rapi = try raw_api.init(init.gpa, parsed.value);
     defer rapi.deinit(init.gpa);
 }
