@@ -49,7 +49,7 @@ pub fn main(init: std.process.Init) !void {
     for (parsed.value.array.items) |item| {
         const object: std.json.ObjectMap = item.object;
         if (object.get("name")) |name| {
-            std.debug.print("ClassInfo:\n{{\tid: {d}, name: {s}\n", .{ id, name.string });
+            std.debug.print("ClassInfo:\n{{\n  id: {d}, name: {s}\n", .{ id, name.string });
         } else return error.nameIsMissing;
         // all object should have a field that is an array
         if (object.get("fields")) |fields_array| {
@@ -66,11 +66,11 @@ pub fn main(init: std.process.Init) !void {
 
 // We are expecting an array
 fn parse_fields(fields: std.json.Value) !void {
-    std.debug.print("\tfields:\n", .{});
+    std.debug.print("  fields:\n", .{});
     for (fields.array.items) |item| {
         const object: std.json.ObjectMap = item.object;
         if (object.get("name")) |name| {
-            std.debug.print("\t\t({s}", .{name.string});
+            std.debug.print("    ({s}", .{name.string});
         } else return error.fieldNameIsMissing;
         if (object.get("type")) |ty| {
             std.debug.print(", {s})\n", .{ty.string});
@@ -79,12 +79,39 @@ fn parse_fields(fields: std.json.Value) !void {
 }
 
 fn parse_messages(messages: std.json.Value) !void {
-    std.debug.print("\tmessages:\n", .{});
+    std.debug.print("  messages:\n", .{});
     for (messages.array.items) |item| {
         const object: std.json.ObjectMap = item.object;
         if (object.get("name")) |name| {
-            std.debug.print("\t\t({s}", .{name.string});
+            std.debug.print("    ({s}", .{name.string});
         } else return error.msgNameIsMissing;
-        std.debug.print(", todo params, todo result)\n", .{});
+        if (object.get("params")) |p| {
+            try parse_msg_params(p);
+        }
+        if (object.get("result")) |r| {
+            try parse_msg_result(r);
+        }
+    }
+}
+
+fn parse_msg_params(params: std.json.Value) !void {
+    for (params.array.items) |item| {
+        const object: std.json.ObjectMap = item.object;
+        if (object.get("name")) |name| {
+            std.debug.print(", {s}:", .{name.string});
+        } else return error.paramNameIsMissing;
+        if (object.get("type")) |ty| {
+            std.debug.print("{s}", .{ty.string});
+        } else return error.paramTypeIsMissing;
+    }
+}
+
+fn parse_msg_result(result: std.json.Value) !void {
+    switch (result) {
+        .array => {
+            const res = result.array.items[0];
+            std.debug.print(", {s})\n", .{res.string});
+        },
+        else => return error.resultIsNotAnArray,
     }
 }
