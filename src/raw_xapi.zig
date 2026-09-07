@@ -8,11 +8,25 @@ pub const ClassInfo = struct {
 };
 
 root: std.ArrayList(ClassInfo),
+arena: std.heap.ArenaAllocator,
 
-pub fn init(gpa: std.mem.Allocator, root: std.json.Value) !Self {
+pub fn init(gpa: std.mem.Allocator) Self {
     // Just to know the size of struct passed on the stack
     std.debug.print("{d}\n", .{@sizeOf(std.json.Value)});
-    var array = std.ArrayList(ClassInfo).empty;
+    return .{
+        .root = std.ArrayList(ClassInfo).empty,
+        .arena = std.heap.ArenaAllocator.init(gpa),
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.arena.deinit();
+}
+
+pub fn parse(self: *Self, root: std.json.Value) !void {
+    // Just to know the size of struct passed on the stack
+    std.debug.print("{d}\n", .{@sizeOf(std.json.Value)});
+    const a = self.arena.allocator();
 
     var id: usize = 1;
     // The top level JSON Value is one array.
@@ -21,7 +35,7 @@ pub fn init(gpa: std.mem.Allocator, root: std.json.Value) !Self {
         .array => for (root.array.items) |item| {
             const object: std.json.ObjectMap = item.object;
             if (object.get("name")) |name| {
-                try array.append(gpa, ClassInfo{ .name = name.string });
+                try self.root.append(a, ClassInfo{ .name = name.string });
                 std.debug.print(
                     "ClassInfo:\n{{\n  id: {d}, name: {s}\n",
                     .{ id, name.string },
@@ -40,12 +54,6 @@ pub fn init(gpa: std.mem.Allocator, root: std.json.Value) !Self {
         },
         else => return error.rootIsNotAnArray,
     }
-
-    return .{ .root = array };
-}
-
-pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-    self.root.deinit(gpa);
 }
 
 // We are expecting an array

@@ -25,6 +25,8 @@ pub fn main(init: std.process.Init) !void {
     defer parsed.deinit();
 
     // 2. Extract parsed value into an intermediate representation.
-    var rapi = try raw_api.init(init.gpa, parsed.value);
-    defer rapi.deinit(init.gpa);
+    var rapi = raw_api.init(init.gpa);
+    defer rapi.deinit();
+
+    try rapi.parse(parsed.value);
 }
