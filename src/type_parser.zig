@@ -2,11 +2,10 @@ const Self = @This();
 
 const std = @import("std");
 
-pub const AstType = enum { builtin, @"enum", class };
+pub const AstType = enum { builtin, @"enum" };
 pub const AstNode = union(AstType) {
     builtin: []const u8,
     @"enum": []const u8,
-    class,
 };
 
 pub fn parse_type(input: []const u8) !AstNode {
