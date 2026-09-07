@@ -7,3 +7,7 @@ pub const TypeKind = enum { builtin, class, @"enum", @"opaque", cons };
 pub fn simple_test() usize {
     return 42;
 }
+
+test "simple test" {
+    try std.testing.expectEqual(42, simple_test());
+}
