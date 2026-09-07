@@ -23,7 +23,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn parse_type(self: *Self, input: []const u8) !AstNode {
-    _ = self; // will use the allocator for ref
+    const a = self.arena.allocator();
 
     if ((std.mem.eql(u8, input, "string")) or
         (std.mem.eql(u8, input, "bool")) or
@@ -35,12 +35,23 @@ pub fn parse_type(self: *Self, input: []const u8) !AstNode {
         return AstNode{ .builtin = input };
     }
 
-    var it = std.mem.splitScalar(u8, input, ' ');
-    const word = it.next() orelse return error.TypeIsMissing;
-    if (std.mem.eql(u8, word, "enum")) {
-        return AstNode{ .@"enum" = it.rest() };
+    // Enum is at the beginning of the input if any.
+    if (std.mem.findScalar(u8, input, ' ')) |idx| {
+        if (std.mem.eql(u8, input[0..idx], "enum")) {
+            return AstNode{ .@"enum" = input[idx + 1 ..] };
+        }
     }
 
+    // Ref is at the end of the string if any
+    if (std.mem.findScalarLast(u8, input, ' ')) |idx| {
+        if (std.mem.eql(u8, input[idx + 1 ..], "ref")) {
+            const ast_node = try a.create(AstNode);
+            ast_node.* = try self.parse_type(input[0..idx]);
+            return AstNode{ .ref = ast_node };
+        }
+    }
+
+    // If nothing match it is a class
     return AstNode{ .class = input };
 }
 
@@ -48,34 +59,13 @@ test "test bare cases" {
     var tp = Self.init(std.testing.allocator);
     defer tp.deinit();
 
-    try std.testing.expectEqual(
-        tp.parse_type("string"),
-        AstNode{ .builtin = "string" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("bool"),
-        AstNode{ .builtin = "bool" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("int"),
-        AstNode{ .builtin = "int" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("float"),
-        AstNode{ .builtin = "float" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("void"),
-        AstNode{ .builtin = "void" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("datetime"),
-        AstNode{ .builtin = "datetime" },
-    );
-    try std.testing.expectEqual(
-        tp.parse_type("session"),
-        AstNode{ .class = "session" },
-    );
+    try std.testing.expectEqual(tp.parse_type("string"), AstNode{ .builtin = "string" });
+    try std.testing.expectEqual(tp.parse_type("bool"), AstNode{ .builtin = "bool" });
+    try std.testing.expectEqual(tp.parse_type("int"), AstNode{ .builtin = "int" });
+    try std.testing.expectEqual(tp.parse_type("float"), AstNode{ .builtin = "float" });
+    try std.testing.expectEqual(tp.parse_type("void"), AstNode{ .builtin = "void" });
+    try std.testing.expectEqual(tp.parse_type("datetime"), AstNode{ .builtin = "datetime" });
+    try std.testing.expectEqual(tp.parse_type("session"), AstNode{ .class = "session" });
 }
 
 test "test enum cases" {
@@ -88,6 +78,23 @@ test "test enum cases" {
             "task_allowed_operations",
             str,
         ),
+        else => unreachable,
+    }
+}
+
+test "test ref cases" {
+    var tp = Self.init(std.testing.allocator);
+    defer tp.deinit();
+
+    const ast_node = try tp.parse_type("session ref");
+    switch (ast_node) {
+        .ref => |ast| {
+            const inner: AstNode = ast.*;
+            switch (inner) {
+                .class => |str| try std.testing.expectEqualStrings("session", str),
+                else => unreachable,
+            }
+        },
         else => unreachable,
     }
 }
