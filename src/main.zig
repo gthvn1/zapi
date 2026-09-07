@@ -3,6 +3,7 @@ const json = std.json;
 const Io = std.Io;
 
 const raw_api = @import("raw_xapi.zig");
+const parser = @import("type_parser.zig");
 
 pub fn main(init: std.process.Init) !void {
     // We will need a writer
@@ -35,4 +36,8 @@ pub fn main(init: std.process.Init) !void {
     try rapi.parse(parsed.value);
     try rapi.dump(stdout_writer);
     try stdout_writer.flush();
+}
+
+test "simple test" {
+    try std.testing.expectEqual(42, parser.simple_test());
 }
