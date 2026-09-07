@@ -49,11 +49,11 @@ pub fn parse(self: *Self, root: std.json.Value) !void {
     // The top level JSON Value is one array.
     // The array contains object that are objectMap.
     switch (root) {
-        .array => for (root.array.items, 1..) |item, id| {
+        .array => for (root.array.items) |item| {
             const object: std.json.ObjectMap = item.object;
 
             const name = object.get("name") orelse return error.nameIsMissing;
-            std.debug.print("ClassInfo:\n{{\n  id: {d}, name: {s}\n", .{ id, name.string });
+            std.debug.print("ClassInfo:\n{{\n  name: {s}\n", .{name.string});
 
             // all object should have a field that is an array
             const fields_arr = object.get("fields") orelse return error.fieldsIsMissing;
@@ -133,7 +133,7 @@ fn parse_msg_result(result: std.json.Value) ![]const u8 {
         .array => |arr| arr,
         else => return error.resultIsNotAnArray,
     };
-    const res = if (arr.items.len == 0) arr.items[0] else return error.resultIsEmpty;
+    const res = if (arr.items.len > 0) arr.items[0] else return error.resultIsEmpty;
 
     std.debug.print(", {s})\n", .{res.string});
     return res.string;
