@@ -16,6 +16,13 @@ pub const FieldInfo = struct {
 
 pub const MessageInfo = struct {
     name: []const u8,
+    params: []MessageInfoParam,
+    result: []const u8,
+};
+
+pub const MessageInfoParam = struct {
+    name: []const u8,
+    type: []const u8,
 };
 
 root: std.ArrayList(ClassInfo),
@@ -49,17 +56,12 @@ pub fn parse(self: *Self, root: std.json.Value) !void {
             std.debug.print("ClassInfo:\n{{\n  id: {d}, name: {s}\n", .{ id, name.string });
 
             // all object should have a field that is an array
-            const fields = if (object.get("fields")) |fields_array|
-                try parse_fields(a, fields_array)
-            else
-                return error.fieldsIsMissing;
+            const fields_arr = object.get("fields") orelse return error.fieldsIsMissing;
+            const fields = try parse_fields(a, fields_arr);
 
             // all object should have messages that is an array
-            const messages =
-                if (object.get("messages")) |messages_array|
-                    try parse_messages(a, messages_array)
-                else
-                    return error.messagesIsMissing;
+            const messages_arr = object.get("messages") orelse return error.messagesIsMissing;
+            const messages = try parse_messages(a, messages_arr);
 
             std.debug.print("}}\n", .{});
 
@@ -97,37 +99,42 @@ fn parse_messages(a: std.mem.Allocator, messages: std.json.Value) ![]MessageInfo
         const name = object.get("name") orelse return error.msgNameIsMissing;
         std.debug.print("    ({s}", .{name.string});
 
-        if (object.get("params")) |p| {
-            try parse_msg_params(p);
-        }
-        if (object.get("result")) |r| {
-            try parse_msg_result(r);
-        }
+        const params_val = object.get("params") orelse return error.failedParseMessageParams;
+        const params = try parse_msg_params(a, params_val);
 
-        slot.* = .{ .name = name.string };
+        const result_val = object.get("result") orelse return error.failedParseMessageResult;
+        const result = try parse_msg_result(result_val);
+
+        slot.* = .{ .name = name.string, .params = params, .result = result };
     }
 
     return m;
 }
 
-fn parse_msg_params(params: std.json.Value) !void {
-    for (params.array.items) |item| {
+fn parse_msg_params(a: std.mem.Allocator, params: std.json.Value) ![]MessageInfoParam {
+    const p: []MessageInfoParam = try a.alloc(MessageInfoParam, params.array.items.len);
+
+    for (params.array.items, p) |item, *slot| {
         const object: std.json.ObjectMap = item.object;
-        if (object.get("name")) |name| {
-            std.debug.print(", {s}:", .{name.string});
-        } else return error.paramNameIsMissing;
-        if (object.get("type")) |ty| {
-            std.debug.print("{s}", .{ty.string});
-        } else return error.paramTypeIsMissing;
+        const name = object.get("name") orelse return error.paramNameIsMissing;
+        const ty = object.get("type") orelse return error.paramTypeIsMissing;
+
+        std.debug.print(", {s}:", .{name.string});
+        std.debug.print("{s}", .{ty.string});
+
+        slot.* = .{ .name = name.string, .type = ty.string };
     }
+
+    return p;
 }
 
-fn parse_msg_result(result: std.json.Value) !void {
-    switch (result) {
-        .array => {
-            const res = result.array.items[0];
-            std.debug.print(", {s})\n", .{res.string});
-        },
+fn parse_msg_result(result: std.json.Value) ![]const u8 {
+    const arr = switch (result) {
+        .array => |arr| arr,
         else => return error.resultIsNotAnArray,
-    }
+    };
+    const res = if (arr.items.len == 0) arr.items[0] else return error.resultIsEmpty;
+
+    std.debug.print(", {s})\n", .{res.string});
+    return res.string;
 }
