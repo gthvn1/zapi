@@ -21,12 +21,12 @@ pub fn parse_type(input: []const u8) !AstNode {
     }
 
     var it = std.mem.splitScalar(u8, input, ' ');
-    const word = it.next() orelse return error.typeIsMissing;
+    const word = it.next() orelse return error.TypeIsMissing;
     if (std.mem.eql(u8, word, "enum")) {
         return AstNode{ .@"enum" = it.rest() };
     }
 
-    return error.notABareNorEnumType;
+    return error.NotABareNorEnumType;
 }
 
 test "test bare cases" {
