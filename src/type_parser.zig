@@ -2,10 +2,11 @@ const Self = @This();
 
 const std = @import("std");
 
-pub const AstType = enum { builtin, @"enum" };
+pub const AstType = enum { builtin, @"enum", class };
 pub const AstNode = union(AstType) {
     builtin: []const u8,
     @"enum": []const u8,
+    class: []const u8,
 };
 
 pub fn parse_type(input: []const u8) !AstNode {
@@ -25,7 +26,7 @@ pub fn parse_type(input: []const u8) !AstNode {
         return AstNode{ .@"enum" = it.rest() };
     }
 
-    return error.NotABareNorEnumType;
+    return AstNode{ .class = input };
 }
 
 test "test bare cases" {
@@ -52,6 +53,10 @@ test "test bare cases" {
     try std.testing.expectEqual(
         parse_type("datetime"),
         AstNode{ .builtin = "datetime" },
+    );
+    try std.testing.expectEqual(
+        parse_type("session"),
+        AstNode{ .class = "session" },
     );
 }
 
