@@ -29,8 +29,6 @@ root: std.ArrayList(ClassInfo),
 arena: std.heap.ArenaAllocator,
 
 pub fn init(gpa: std.mem.Allocator) Self {
-    // Just to know the size of struct passed on the stack
-    std.debug.print("{d}\n", .{@sizeOf(std.json.Value)});
     return .{
         .root = std.ArrayList(ClassInfo).empty,
         .arena = std.heap.ArenaAllocator.init(gpa),
@@ -41,9 +39,29 @@ pub fn deinit(self: *Self) void {
     self.arena.deinit();
 }
 
+pub fn dump(self: *Self, writer: *std.Io.Writer) !void {
+    try writer.print("There are {} class\n", .{self.root.items.len});
+    for (self.root.items) |class_info| {
+        try writer.print("ClassInfo: {s}\n", .{class_info.name});
+        try writer.print("  Fields:\n", .{});
+        for (class_info.fields) |field| {
+            try writer.print("    {s}/{s}\n", .{ field.name, field.type });
+        }
+        try writer.print("  Messages:\n", .{});
+        for (class_info.messages) |msg| {
+            try writer.print("    {s} (", .{msg.name});
+            for (msg.params, 0..) |param, idx| {
+                if (idx != 0)
+                    try writer.print(", {s}:{s}", .{ param.name, param.type })
+                else
+                    try writer.print("{s}:{s}", .{ param.name, param.type });
+            }
+            try writer.print(") -> {s}\n", .{msg.result});
+        }
+    }
+}
+
 pub fn parse(self: *Self, root: std.json.Value) !void {
-    // Just to know the size of struct passed on the stack
-    std.debug.print("{d}\n", .{@sizeOf(std.json.Value)});
     const a = self.arena.allocator();
 
     // The top level JSON Value is one array.
@@ -53,7 +71,6 @@ pub fn parse(self: *Self, root: std.json.Value) !void {
             const object: std.json.ObjectMap = item.object;
 
             const name = object.get("name") orelse return error.nameIsMissing;
-            std.debug.print("ClassInfo:\n{{\n  name: {s}\n", .{name.string});
 
             // all object should have a field that is an array
             const fields_arr = object.get("fields") orelse return error.fieldsIsMissing;
@@ -62,8 +79,6 @@ pub fn parse(self: *Self, root: std.json.Value) !void {
             // all object should have messages that is an array
             const messages_arr = object.get("messages") orelse return error.messagesIsMissing;
             const messages = try parse_messages(a, messages_arr);
-
-            std.debug.print("}}\n", .{});
 
             try self.root.append(a, .{ .name = name.string, .fields = fields, .messages = messages });
         },
@@ -74,14 +89,10 @@ pub fn parse(self: *Self, root: std.json.Value) !void {
 fn parse_fields(a: std.mem.Allocator, fields: std.json.Value) ![]FieldInfo {
     const f: []FieldInfo = try a.alloc(FieldInfo, fields.array.items.len);
 
-    std.debug.print("  fields:\n", .{});
     for (fields.array.items, f) |item, *slot| {
         const object: std.json.ObjectMap = item.object;
         const name = object.get("name") orelse return error.fieldNameIsMissing;
         const ty = object.get("type") orelse return error.fieldTypeIsMissing;
-
-        std.debug.print("    ({s}", .{name.string});
-        std.debug.print(", {s})\n", .{ty.string});
 
         slot.* = .{ .name = name.string, .type = ty.string };
     }
@@ -92,12 +103,10 @@ fn parse_fields(a: std.mem.Allocator, fields: std.json.Value) ![]FieldInfo {
 fn parse_messages(a: std.mem.Allocator, messages: std.json.Value) ![]MessageInfo {
     const m: []MessageInfo = try a.alloc(MessageInfo, messages.array.items.len);
 
-    std.debug.print("  messages:\n", .{});
     for (messages.array.items, m) |item, *slot| {
         const object: std.json.ObjectMap = item.object;
 
         const name = object.get("name") orelse return error.msgNameIsMissing;
-        std.debug.print("    ({s}", .{name.string});
 
         const params_val = object.get("params") orelse return error.failedParseMessageParams;
         const params = try parse_msg_params(a, params_val);
@@ -119,9 +128,6 @@ fn parse_msg_params(a: std.mem.Allocator, params: std.json.Value) ![]MessageInfo
         const name = object.get("name") orelse return error.paramNameIsMissing;
         const ty = object.get("type") orelse return error.paramTypeIsMissing;
 
-        std.debug.print(", {s}:", .{name.string});
-        std.debug.print("{s}", .{ty.string});
-
         slot.* = .{ .name = name.string, .type = ty.string };
     }
 
@@ -135,6 +141,5 @@ fn parse_msg_result(result: std.json.Value) ![]const u8 {
     };
     const res = if (arr.items.len > 0) arr.items[0] else return error.resultIsEmpty;
 
-    std.debug.print(", {s})\n", .{res.string});
     return res.string;
 }
