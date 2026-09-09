@@ -1,23 +1,53 @@
-// We want to send:
-//❯ curl -v http://1.2.3.4/jsonrpc -d '{"jsonrpc":"2.0","method":"session.login_with_password","params":["root","pass","1.0","gtntest"],"id":1}'
-//*   Trying 1.2.3.4:80...
-//* Connected to 1.2.3.4 (1.2.3.4) port 80
-//* using HTTP/1.x
-//> POST /jsonrpc HTTP/1.1
-//> Host: 1.2.3.4
-//> User-Agent: curl/8.15.0
-//> Accept: */*
-//> Content-Length: 104
-//> Content-Type: application/x-www-form-urlencoded
-//>
-//* upload completely sent off: 104 bytes
-//< HTTP/1.1 200 OK
-//< content-length: 126
-//< connection: keep-alive
-//< cache-control: no-cache, no-store
-//< content-type: application/json
-//< Access-Control-Allow-Origin: *
-//< Access-Control-Allow-Headers: X-Requested-With
-//<
-//* Connection #0 to host 1.2.3.4 left intact
-//{"jsonrpc":"2.0","error":{"code":1,"message":"SESSION_AUTHENTICATION_FAILED","data":["root","Authentication failure"]},"id":1}
+const std = @import("std");
+const net = std.Io.net;
+const print = std.debug.print;
+
+const IPADDR = "127.0.0.1";
+const PORT = 80;
+
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    // We want to send:
+    //❯ curl -v http://localhost/jsonrpc -d '{
+    //    "jsonrpc":"2.0",
+    //    "method":"session.login_with_password",
+    //    "params":["root","pass","1.0","gtntest"],
+    //    "id":1}'
+    //
+    // For testing we can run locally: nc -kl 6666
+    const peer = try net.IpAddress.parseIp4(IPADDR, PORT);
+    const conn = try peer.connect(io, .{ .mode = .stream });
+    defer conn.close(io);
+
+    const body =
+        \\{
+        \\  "jsonrpc":"2.0",
+        \\  "method":"session.login_with_password",
+        \\  "params":["root","pass","1.0","gtntest"],
+        \\  "id":1
+        \\}
+    ;
+
+    var wbuf: [1024]u8 = undefined;
+    var w = conn.writer(io, &wbuf);
+    try w.interface.print("POST /jsonrpc HTTP/1.1\r\n", .{});
+    try w.interface.print("Host: {s}\r\n", .{IPADDR});
+    try w.interface.print("User-Agent: zig/0.0.7\r\n", .{});
+    try w.interface.print("Accept: */*\r\n", .{});
+    try w.interface.print("Content-Length: {d}\r\n", .{body.len});
+    try w.interface.print("Content-Type: application/json\r\n", .{});
+    try w.interface.print("Connection: close\r\n", .{});
+    try w.interface.print("\r\n", .{});
+    try w.interface.print("{s}", .{body});
+    try w.interface.flush();
+
+    var rbuf: [1024]u8 = undefined;
+    var r = conn.reader(io, &rbuf);
+
+    var chunk: [1024]u8 = undefined;
+    while (true) {
+        const n = try r.interface.readSliceShort(&chunk);
+        print("{s}\n", .{chunk[0..n]});
+        if (n < chunk.len) break;
+    }
+}
