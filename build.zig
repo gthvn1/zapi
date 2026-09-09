@@ -36,4 +36,26 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run parser tests");
     test_step.dependOn(&run_test.step);
+
+    // We create a module for the generated file. This file will be
+    // used by the examples.
+    const generated_mod = b.createModule(.{
+        .root_source_file = b.path("src/generated.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const basic_exe = b.addExecutable(.{
+        .name = "basic",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/basic.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    basic_exe.root_module.addImport("generated", generated_mod);
+
+    const basic_run = b.addRunArtifact(basic_exe);
+    const examples_step = b.step("examples", "Run examples");
+    examples_step.dependOn(&basic_run.step);
 }
