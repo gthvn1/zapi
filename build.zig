@@ -37,10 +37,10 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run parser tests");
     test_step.dependOn(&run_test.step);
 
-    // We create a module for the generated file. This file will be
+    // We create a module for the xapi file. This file will be
     // used by the examples.
-    const generated_mod = b.createModule(.{
-        .root_source_file = b.path("src/generated.zig"),
+    const xapi_mod = b.createModule(.{
+        .root_source_file = b.path("src/xapi.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    basic_exe.root_module.addImport("generated", generated_mod);
+    basic_exe.root_module.addImport("xapi", xapi_mod);
 
     const basic_run = b.addRunArtifact(basic_exe);
     const examples_step = b.step("examples", "Run examples");
