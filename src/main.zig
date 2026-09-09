@@ -3,6 +3,7 @@ const json = std.json;
 const Io = std.Io;
 
 const raw_api = @import("raw_xapi.zig");
+const rpc = @import("rpc.zig");
 
 pub fn main(init: std.process.Init) !void {
     // We will need a writer
@@ -35,4 +36,21 @@ pub fn main(init: std.process.Init) !void {
     try rapi.parse(parsed.value);
     try rapi.dump(stdout_writer);
     try stdout_writer.flush();
+
+    {
+        // Testing RPC
+        var conn = try rpc.connect(init.io);
+        defer conn.close();
+
+        const body =
+            \\{
+            \\  "jsonrpc":"2.0",
+            \\  "method":"session.login_with_password",
+            \\  "params":["root","pass","1.0","gtntest"],
+            \\  "id":1
+            \\}
+        ;
+
+        try conn.send(body);
+    }
 }

@@ -16,17 +16,6 @@ pub fn build(b: *std.Build) void {
     // exe is the artifact of the compilation, we need to add a relation with install step.
     b.installArtifact(exe);
 
-    // Temporarly add src/rpc.zig until we test it completely
-    const rpc_client = b.addExecutable(.{
-        .name = "rpc",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/rpc.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    b.installArtifact(rpc_client);
-
     // We can now do: zig build --watch --summary all
     // and run it: ./zig-out/bin/zapi
 
