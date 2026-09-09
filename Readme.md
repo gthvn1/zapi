@@ -16,14 +16,14 @@ const Xapi = @import("generated_xapi.zig");
 const Session = Xapi.Session;
 const Vm = Xapi.Vm;
 
-var conn = try Session.login_with_password("user", "pass");
-const vms = try Vm.get_all(&conn);
+var session = try Session.login_with_password("user", "pass");
+const vms = try Vm.get_all(session);
 for (vms) |vm| {
-  const name = try vm.get_name_label(&conn);
+  const name = try vm.get_name_label(session);
   std.debug.print("- {s}, .{name}");
 }
 
-Session.logout(&conn);
+Session.logout(session);
 
 ```
 - At the end we expect to send a JSON-RPC:
