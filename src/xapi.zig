@@ -64,7 +64,7 @@ pub const Class = struct {
     // TODO: we probably want to avoid failing... but how?
     pub const Session = struct {
         pub fn login_with_password(
-            conn: Conn,
+            conn: *const Conn,
             uname: []const u8,
             pwd: []const u8,
             version: []const u8,
@@ -74,6 +74,7 @@ pub const Class = struct {
             _ = pwd;
             _ = version;
             _ = originator;
+            // TODO: construct the body with parameters
             const body =
                 \\{
                 \\  "jsonrpc":"2.0",
@@ -84,12 +85,27 @@ pub const Class = struct {
             ;
             try conn.call(body);
 
+            // TODO: call will return the result of the call, we
+            // need to keep the return value that is the opaqueref
             return .{};
         }
 
-        pub fn logout(conn: Conn, session: *Session) void {
-            _ = conn;
-            _ = session;
+        // TODO: we can probably detect that a parameter is the class
+        // and so put it first before the conn. To be checked but it
+        // looks like the API already named "self" the parameter that
+        // is the class... so we can rely on that probably.
+        pub fn logout(self: *Session, conn: *Conn) !void {
+            // TODO: self will probably hold the OpaqueRef
+            _ = self;
+            const body =
+                \\{
+                \\  "jsonrpc":"2.0",
+                \\  "method":"session.logout",
+                \\  "params":[???],
+                \\  "id":1
+                \\}
+            ;
+            try conn.call(body);
         }
     };
 };
