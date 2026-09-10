@@ -1,4 +1,6 @@
+//
 // /!\ THE FILE WILL BE GENERATED. FOR TESTING PURPOSE WE DO IT BY HAND /!\
+//
 const std = @import("std");
 const net = std.Io.net;
 const print = std.debug.print;
@@ -7,6 +9,12 @@ pub const Conn = struct {
     stream: ?net.Stream = null,
     io: std.Io,
     hostname: []const u8,
+
+    pub fn open(io: std.Io, hostname: []const u8, port: u16) !Conn {
+        const peer = try net.IpAddress.parseIp4(hostname, port);
+        const conn = try peer.connect(io, .{ .mode = .stream });
+        return .{ .stream = conn, .io = io, .hostname = hostname };
+    }
 
     pub fn close(self: *Conn) void {
         if (self.stream) |stream| {
@@ -53,15 +61,8 @@ pub const Conn = struct {
     }
 };
 
-pub fn connect(io: std.Io, hostname: []const u8, port: u16) !Conn {
-    const peer = try net.IpAddress.parseIp4(hostname, port);
-    const conn = try peer.connect(io, .{ .mode = .stream });
-    return .{ .stream = conn, .io = io, .hostname = hostname };
-}
-
 // TODO: This part will be all generated classes.
 pub const Class = struct {
-    // TODO: we probably want to avoid failing... but how?
     pub const Session = struct {
         pub fn login_with_password(
             conn: *const Conn,
@@ -106,6 +107,24 @@ pub const Class = struct {
                 \\}
             ;
             try conn.call(body);
+        }
+    };
+
+    pub const Vm = struct {
+        // TODO: fake VM ref set with array of VM for now
+        pub fn get_all(conn: *Conn, session_id: *Session) ![]*Vm {
+            // TODO: call RPC
+            _ = conn;
+            _ = session_id;
+            return &[_]*Vm{};
+        }
+
+        pub fn get_name_label(self: *Vm, conn: *Conn, session_id: *Session) []const u8 {
+            // TODO: call RPC
+            _ = self;
+            _ = conn;
+            _ = session_id;
+            return "todo";
         }
     };
 };
