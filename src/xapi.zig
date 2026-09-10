@@ -38,15 +38,21 @@ pub const Conn = struct {
 
         var wbuf: [1024]u8 = undefined;
         var w = s.writer(self.io, &wbuf);
-        try w.interface.print("POST /jsonrpc HTTP/1.1\r\n", .{});
-        try w.interface.print("Host: {s}\r\n", .{self.hostname});
-        try w.interface.print("User-Agent: zig/0.0.7\r\n", .{});
-        try w.interface.print("Accept: */*\r\n", .{});
-        try w.interface.print("Content-Length: {d}\r\n", .{body.len});
-        try w.interface.print("Content-Type: application/json\r\n", .{});
-        try w.interface.print("Connection: close\r\n", .{});
-        try w.interface.print("\r\n", .{});
-        try w.interface.print("{s}", .{body});
+
+        const headers_fmt =
+            \\POST /jsonrpc HTTP/1.1
+            \\Host: {s}
+            \\User-Agent: zig/0.0.7
+            \\Accept: */*
+            \\Content-Length: {d}
+            \\Content-Type: application/json
+            \\Connection: close
+            \\
+            \\
+        ;
+
+        try w.interface.print(headers_fmt, .{ self.hostname, body.len });
+        try w.interface.writeAll(body);
         try w.interface.flush();
 
         var rbuf: [1024]u8 = undefined;
@@ -62,8 +68,35 @@ pub const Conn = struct {
 };
 
 // TODO: This part will be all generated classes.
+fn writeRpcRequest(out_buf: []u8, method: []const u8, params: []const []const u8, id: usize) !void {
+    var out: std.Io.Writer = .fixed(out_buf);
+    var w: std.json.Stringify = .{ .writer = &out };
+
+    try w.beginObject();
+    try w.objectField("jsonrpc");
+    try w.write("2.0");
+    try w.objectField("method");
+    try w.write(method);
+    try w.objectField("params");
+    try w.beginArray();
+    for (params) |param| {
+        try w.write(param);
+    }
+    try w.endArray();
+    try w.objectField("id");
+    try w.print("{}", .{id});
+    try w.endObject();
+}
+
 pub const Class = struct {
     pub const Session = struct {
+        // TODO: Not sure at all about this. Probably need to be returned by login.
+        // It should probably be part of the connection. But it means a connection
+        // is related to a session. So maybe in conn we need to track an array of
+        // sessions opened durint the same conn and so we lookup to check that session
+        // passed as parameter are valid. Something like that...
+        session: []const u8 = "OpaqueRef(TODO)",
+
         pub fn login_with_password(
             conn: *const Conn,
             uname: []const u8,
@@ -71,20 +104,10 @@ pub const Class = struct {
             version: []const u8,
             originator: []const u8,
         ) !Session {
-            _ = uname;
-            _ = pwd;
-            _ = version;
-            _ = originator;
-            // TODO: construct the body with parameters
-            const body =
-                \\{
-                \\  "jsonrpc":"2.0",
-                \\  "method":"session.login_with_password",
-                \\  "params":["root","pass","1.0","gtntest"],
-                \\  "id":1
-                \\}
-            ;
-            try conn.call(body);
+            var body: [1024]u8 = undefined;
+            const params: [4][]const u8 = .{ uname, pwd, version, originator };
+            try writeRpcRequest(&body, "session.login_with_password", &params, 1);
+            try conn.call(&body);
 
             // TODO: call will return the result of the call, we
             // need to keep the return value that is the opaqueref
@@ -96,17 +119,10 @@ pub const Class = struct {
         // looks like the API already named "self" the parameter that
         // is the class... so we can rely on that probably.
         pub fn logout(self: *Session, conn: *Conn) !void {
-            // TODO: self will probably hold the OpaqueRef
-            _ = self;
-            const body =
-                \\{
-                \\  "jsonrpc":"2.0",
-                \\  "method":"session.logout",
-                \\  "params":[???],
-                \\  "id":1
-                \\}
-            ;
-            try conn.call(body);
+            var body: [1024]u8 = undefined;
+            const params: [1][]const u8 = .{self.session};
+            try writeRpcRequest(&body, "session.logout", &params, 1);
+            try conn.call(&body);
         }
     };
 
