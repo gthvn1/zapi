@@ -54,8 +54,5 @@ pub fn build(b: *std.Build) void {
         }),
     });
     basic_exe.root_module.addImport("xapi", xapi_mod);
-
-    const basic_run = b.addRunArtifact(basic_exe);
-    const examples_step = b.step("examples", "Run examples");
-    examples_step.dependOn(&basic_run.step);
+    b.installArtifact(basic_exe);
 }

@@ -1,7 +1,14 @@
+const std = @import("std");
 const xapi = @import("xapi");
-const Session = xapi.Session;
 
-pub fn main() void {
-    var session = Session.login_with_password("root", "pass", "1.0", "test");
-    defer session.logout();
+const IPADDR = "127.0.0.1";
+const PORT = 6666;
+
+pub fn main(init: std.process.Init) !void {
+    var conn = try xapi.connect(init.io, IPADDR, PORT);
+    defer conn.close();
+
+    const Session = xapi.Class.Session;
+    var session = try Session.login_with_password(conn, "root", "pass", "1.0", "test");
+    defer Session.logout(conn, &session);
 }
