@@ -7,6 +7,8 @@ pub fn main(init: std.process.Init) !void {
 
     std.debug.print("JSON size: {d}\n", .{body.len});
     std.debug.print("{s}\n", .{body});
+
+    try parse_response(login_failure_response);
 }
 
 const login_failure_response =
@@ -18,6 +20,23 @@ const login_failure_response =
     "Access-Control-Allow-Headers: X-Requested-With\r\n" ++
     "\r\n" ++
     "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":\"SESSION_AUTHENTICATION_FAILED\",\"data\":[\"root\",\"Authentication failure\"]},\"id\":1}";
+
+fn parse_response(r: []const u8) !void {
+    std.debug.print("== response len {d}\n", .{r.len});
+    std.debug.print("== Parsing <{s}>\n", .{r});
+    var it = std.http.HeaderIterator.init(r);
+    while (it.next()) |h| {
+        if (std.ascii.eqlIgnoreCase(h.name, "content-length")) {
+            const v = try std.fmt.parseInt(usize, h.value, 10);
+            std.debug.print("> {d}\n", .{v});
+        }
+    }
+
+    var head: std.http.HeadParser = .{};
+    const off = head.feed(r);
+    std.debug.print("feed returns: {d}\n", .{off});
+    std.debug.print("body: <{s}>\n", .{r[off..]});
+}
 
 fn writeRpcRequest(allocator: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
