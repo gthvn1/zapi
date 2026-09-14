@@ -8,7 +8,7 @@ pub fn main(init: std.process.Init) !void {
     const Session = xapi.Class.Session;
     const Vm = xapi.Class.Vm;
 
-    var conn = try xapi.Conn.open(init.io, IPADDR, PORT);
+    var conn = try xapi.Conn.open(init.gpa, init.io, IPADDR, PORT);
     defer conn.close();
 
     var session = try Session.login_with_password(&conn, "root", "pass", "1.0", "test");
