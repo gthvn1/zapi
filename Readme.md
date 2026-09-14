@@ -35,3 +35,5 @@ pub fn main(init: std.process.Init) !void {
 }
 
 ```
+- For testing I setup the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`
+- If you don't have host with xapi you can see what is sent using: `nc -kl 6666`
