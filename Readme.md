@@ -35,5 +35,7 @@ pub fn main(init: std.process.Init) !void {
 }
 
 ```
-- For testing I setup the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`
+- For testing, setup the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`
 - If you don't have host with xapi you can see what is sent using: `nc -kl 6666`
+- *Tips*: I had an issue with `\r\n` that was not correct when using multiline.
+          To see it: `nv -kl 6666 | xxd`
