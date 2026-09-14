@@ -8,7 +8,7 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("JSON size: {d}\n", .{body.len});
     std.debug.print("{s}\n", .{body});
 
-    try parse_response(login_failure_response);
+    try parse_response(init.gpa, login_failure_response);
 }
 
 const login_failure_response =
@@ -21,7 +21,7 @@ const login_failure_response =
     "\r\n" ++
     "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":\"SESSION_AUTHENTICATION_FAILED\",\"data\":[\"root\",\"Authentication failure\"]},\"id\":1}";
 
-fn parse_response(r: []const u8) !void {
+fn parse_response(allocator: std.mem.Allocator, r: []const u8) !void {
     std.debug.print("== response len {d}\n", .{r.len});
     std.debug.print("== Parsing <{s}>\n", .{r});
     var it = std.http.HeaderIterator.init(r);
@@ -36,6 +36,19 @@ fn parse_response(r: []const u8) !void {
     const off = head.feed(r);
     std.debug.print("feed returns: {d}\n", .{off});
     std.debug.print("body: <{s}>\n", .{r[off..]});
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, r[off..], .{});
+    defer parsed.deinit();
+    std.debug.print("parsed: {any}\n", .{@TypeOf(parsed)});
+    switch (parsed.value) {
+        .object => |o| {
+            std.debug.print("found an object of type {any}\n", .{@TypeOf(o)});
+            for (o.keys()) |key| {
+                std.debug.print("  {s}\n", .{key});
+            }
+        },
+        else => std.debug.print("found something else", .{}),
+    }
 }
 
 fn writeRpcRequest(allocator: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
