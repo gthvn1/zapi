@@ -23,7 +23,7 @@ pub const Conn = struct {
         }
     }
 
-    fn call(self: *const Conn, body: []u8) !void {
+    fn call(self: *const Conn, comptime RetType: type, body: []u8) !RetType {
         // We want to send:
         //❯ curl -v http://localhost/jsonrpc -d '{
         //    "jsonrpc":"2.0",
@@ -70,6 +70,8 @@ pub const Conn = struct {
             print("{s}\n", .{chunk[0..n]});
             if (n < chunk.len) break;
         }
+
+        return undefined;
     }
 };
 
@@ -97,57 +99,57 @@ fn writeRpcRequest(gpa: std.mem.Allocator, method: []const u8, params: []const [
 }
 
 pub const Class = struct {
-    pub const Session = struct {
-        // TODO: Not sure at all about this. Probably need to be returned by login.
-        // It should probably be part of the connection. But it means a connection
-        // is related to a session. So maybe in conn we need to track an array of
-        // sessions opened durint the same conn and so we lookup to check that session
-        // passed as parameter are valid. Something like that...
-        session: []const u8 = "OpaqueRef(TODO)",
+    fn OpaqueRef(comptime classname: []const u8) type {
+        return struct {
+            ref: []const u8,
+            pub const class_name = classname;
+        };
+    }
 
+    pub const SessionRef = OpaqueRef("session");
+    pub const VmRef = OpaqueRef("VM");
+
+    pub const Session = struct {
         pub fn login_with_password(
             conn: *const Conn,
             uname: []const u8,
             pwd: []const u8,
             version: []const u8,
             originator: []const u8,
-        ) !Session {
+        ) !SessionRef {
             const params: [4][]const u8 = .{ uname, pwd, version, originator };
             const body = try writeRpcRequest(conn.allocator, "session.login_with_password", &params, 1);
             defer conn.allocator.free(body);
-            try conn.call(body);
-
-            // TODO: call will return the result of the call, we
-            // need to keep the return value that is the opaqueref
-            return .{};
+            return conn.call(SessionRef, body);
         }
 
         // TODO: we can probably detect that a parameter is the class
         // and so put it first before the conn. To be checked but it
         // looks like the API already named "self" the parameter that
         // is the class... so we can rely on that probably.
-        pub fn logout(self: *Session, conn: *Conn) !void {
-            const params: [1][]const u8 = .{self.session};
+        pub fn logout(conn: *Conn, session: SessionRef) !void {
+            const params: [1][]const u8 = .{session.ref};
             const body = try writeRpcRequest(conn.allocator, "session.logout", &params, 1);
             defer conn.allocator.free(body);
-            try conn.call(body);
+            try conn.call(void, body);
         }
     };
 
     pub const Vm = struct {
+
         // TODO: fake VM ref set with array of VM for now
-        pub fn get_all(conn: *Conn, session_id: *Session) ![]*Vm {
+        pub fn get_all(conn: *Conn, session: SessionRef) ![]*Vm {
             // TODO: call RPC
             _ = conn;
-            _ = session_id;
+            _ = session;
             return &[_]*Vm{};
         }
 
-        pub fn get_name_label(self: *Vm, conn: *Conn, session_id: *Session) []const u8 {
+        pub fn get_name_label(self: *Vm, conn: *Conn, session: SessionRef) []const u8 {
             // TODO: call RPC
             _ = self;
             _ = conn;
-            _ = session_id;
+            _ = session;
             return "todo";
         }
     };

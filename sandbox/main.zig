@@ -1,14 +1,17 @@
 const std = @import("std");
 
 pub fn main(init: std.process.Init) !void {
+    var arena = init.arena;
+    defer arena.deinit();
+    const a = arena.allocator();
+
     const params: [2][]const u8 = .{ "hello", "sailor" };
-    const body = try writeRpcRequest(init.gpa, "Say", &params, 42);
-    defer init.gpa.free(body);
+    const body = try writeRpcRequest(a, "Say", &params, 42);
 
     std.debug.print("JSON size: {d}\n", .{body.len});
     std.debug.print("{s}\n", .{body});
 
-    try parse_response(init.gpa, login_failure_response);
+    try parse_response(a, login_failure_response);
 }
 
 const login_failure_response =
@@ -20,6 +23,11 @@ const login_failure_response =
     "Access-Control-Allow-Headers: X-Requested-With\r\n" ++
     "\r\n" ++
     "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":\"SESSION_AUTHENTICATION_FAILED\",\"data\":[\"root\",\"Authentication failure\"]},\"id\":1}";
+
+const Response = union(enum) {
+    ok: struct { message: []const u8 },
+    not_ok: struct { code: u8, message: []const u8 },
+};
 
 fn parse_response(allocator: std.mem.Allocator, r: []const u8) !void {
     std.debug.print("== response len {d}\n", .{r.len});
