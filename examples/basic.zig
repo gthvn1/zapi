@@ -19,4 +19,6 @@ pub fn main(init: std.process.Init) !void {
         const name = vm.get_name_label(&conn, session);
         std.debug.print("- {s}\n", .{name});
     }
+
+    std.debug.print("Bye\n", .{});
 }

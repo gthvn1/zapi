@@ -3,7 +3,6 @@
 //
 const std = @import("std");
 const net = std.Io.net;
-const print = std.debug.print;
 
 pub const Conn = struct {
     stream: ?net.Stream = null,
@@ -67,10 +66,13 @@ pub const Conn = struct {
         var chunk: [1024]u8 = undefined;
         while (true) {
             const n = try r.interface.readSliceShort(&chunk);
-            print("{s}\n", .{chunk[0..n]});
+            std.debug.print("Chunk: <{s}>\n", .{chunk[0..n]});
             if (n < chunk.len) break;
         }
 
+        // TODO: Ugly hack to be able to compile and run basic.zig
+        if (RetType == void) return;
+        if (RetType == Class.SessionRef) return .{ .ref = "OpaqueRef:stub" };
         return undefined;
     }
 };
