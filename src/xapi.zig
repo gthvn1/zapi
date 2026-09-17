@@ -58,17 +58,21 @@ pub const Conn = struct {
         try w.interface.flush();
 
         // TODO: See the todo above, here we just read everything. Next we need to
-        // extract the content length to read the correct number of bytes. And be
-        // able to read more than one response...
+        // extract the content length to read the exact number of bytes.
         var rbuf: [1024]u8 = undefined;
         var r = s.reader(self.io, &rbuf);
+
+        var response: std.ArrayList(u8) = .empty;
+        defer response.deinit(self.allocator);
 
         var chunk: [1024]u8 = undefined;
         while (true) {
             const n = try r.interface.readSliceShort(&chunk);
-            std.debug.print("Chunk: <{s}>\n", .{chunk[0..n]});
-            if (n < chunk.len) break;
+            if (n == 0) break;
+            try response.appendSlice(self.allocator, chunk[0..n]);
         }
+
+        std.debug.print("= Response begin =\n{s}\n= Responde end =\n", .{response.items});
 
         // TODO: Ugly hack to be able to compile and run basic.zig
         if (RetType == void) return;
