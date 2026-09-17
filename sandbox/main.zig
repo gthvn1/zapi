@@ -14,6 +14,17 @@ pub fn main(init: std.process.Init) !void {
     try parse_response(a, login_failure_response);
 }
 
+const login_success_response =
+    "HTTP/1.1 200 OK\r\n" ++
+    "content-length: 82\r\n" ++
+    "connection: close\r\n" ++
+    "cache-control: no-cache, no-store\r\n" ++
+    "content-type: application/json\r\n" ++
+    "Access-Control-Allow-Origin: *\r\n" ++
+    "Access-Control-Allow-Headers: X-Requested-With\r\n" ++
+    "\r\n" ++
+    "{\"jsonrpc\":\"2.0\",\"result\":\"OpaqueRef:11963daf-83d6-089d-570a-ee33e841db48\",\"id\":1}";
+
 const login_failure_response =
     "HTTP/1.1 200 OK\r\n" ++
     "content-length: 126\r\n" ++
