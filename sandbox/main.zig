@@ -2,16 +2,29 @@ const std = @import("std");
 
 pub fn main(init: std.process.Init) !void {
     var arena = init.arena;
-    defer arena.deinit();
     const a = arena.allocator();
 
+    // Testing generation of RPC
     const params: [2][]const u8 = .{ "hello", "sailor" };
-    const body = try writeRpcRequest(a, "Say", &params, 42);
+    const rpc = try writeRpcRequest(a, "Say", &params, 42);
 
-    std.debug.print("JSON size: {d}\n", .{body.len});
-    std.debug.print("{s}\n", .{body});
+    std.debug.print("JSON size: {d}\n", .{rpc.len});
+    std.debug.print("{s}\n", .{rpc});
 
-    try parse_response(a, login_failure_response);
+    // Testing the parsing of response
+    const r1 = try parseResponse(a, login_failure_response);
+    if (r1 == .not_ok) {
+        std.debug.print("[OK] error checked\n", .{});
+    } else {
+        std.debug.print("Ooops not expected\n", .{});
+    }
+
+    const r2 = try parseResponse(a, login_success_response);
+    if (r2 == .ok) {
+        std.debug.print("[OK] success checked\n", .{});
+    } else {
+        std.debug.print("Ooops not expected\n", .{});
+    }
 }
 
 const login_success_response =
@@ -36,13 +49,36 @@ const login_failure_response =
     "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":\"SESSION_AUTHENTICATION_FAILED\",\"data\":[\"root\",\"Authentication failure\"]},\"id\":1}";
 
 const Response = union(enum) {
-    ok: struct { message: []const u8 },
-    not_ok: struct { code: u8, message: []const u8 },
+    ok: std.json.Value,
+    not_ok: struct { code: i64, message: []const u8, data: std.json.Value },
 };
 
-fn parse_response(allocator: std.mem.Allocator, r: []const u8) !void {
-    std.debug.print("== response len {d}\n", .{r.len});
-    std.debug.print("== Parsing <{s}>\n", .{r});
+fn getField(v: std.json.Value, key: []const u8) ?std.json.Value {
+    return switch (v) {
+        .object => |o| o.get(key),
+        else => null,
+    };
+}
+
+fn getString(v: std.json.Value, key: []const u8) ?[]const u8 {
+    const field = getField(v, key) orelse return null;
+    return switch (field) {
+        .string, .number_string => |s| s,
+        else => null,
+    };
+}
+
+fn getInt(v: std.json.Value, key: []const u8) ?i64 {
+    const field = getField(v, key) orelse return null;
+    return switch (field) {
+        .integer => |i| i,
+        else => null,
+    };
+}
+
+fn parseResponse(allocator: std.mem.Allocator, r: []const u8) !Response {
+    std.debug.print("== Response len {d}\n", .{r.len});
+    std.debug.print("== Response start ==\n{s}\n== Response end ==\n", .{r});
     var it = std.http.HeaderIterator.init(r);
     while (it.next()) |h| {
         if (std.ascii.eqlIgnoreCase(h.name, "content-length")) {
@@ -53,21 +89,40 @@ fn parse_response(allocator: std.mem.Allocator, r: []const u8) !void {
 
     var head: std.http.HeadParser = .{};
     const off = head.feed(r);
-    std.debug.print("feed returns: {d}\n", .{off});
-    std.debug.print("body: <{s}>\n", .{r[off..]});
+    std.debug.print("== Bytes consumed by header: {d}\n", .{off});
+    // We can now find the body
+    const body = r[off..];
+    std.debug.print("== body start ==\n{s}\n== body end==\n", .{body});
 
-    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, r[off..], .{});
-    defer parsed.deinit();
-    std.debug.print("parsed: {any}\n", .{@TypeOf(parsed)});
-    switch (parsed.value) {
-        .object => |o| {
-            std.debug.print("found an object of type {any}\n", .{@TypeOf(o)});
-            for (o.keys()) |key| {
-                std.debug.print("  {s}\n", .{key});
-            }
-        },
-        else => std.debug.print("found something else", .{}),
+    const parsed: std.json.Value = try std.json.parseFromSliceLeaky(
+        std.json.Value,
+        allocator,
+        body,
+        .{},
+    );
+
+    // Check if it is an error. Not that JSON-RPC 1.0 allows "
+    // error: null".
+    if (getField(parsed, "error")) |e| {
+        if (e != .null) {
+            const code = getInt(e, "code") orelse return error.CodeMissing;
+            const msg = getString(e, "message") orelse return error.MsgMissing;
+            const data: std.json.Value = getField(e, "data") orelse .null;
+            return .{ .not_ok = .{
+                .code = code,
+                .message = msg,
+                .data = data,
+            } };
+        }
     }
+
+    if (getField(parsed, "result")) |result| {
+        return .{
+            .ok = result,
+        };
+    }
+
+    return error.InvalidResponse;
 }
 
 fn writeRpcRequest(allocator: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
