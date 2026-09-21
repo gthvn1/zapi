@@ -11,7 +11,7 @@ pub fn main(init: std.process.Init) !void {
     var conn = try xapi.Conn.open(init.gpa, init.io, IPADDR, PORT);
     defer conn.close();
 
-    const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "test");
+    const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "gthvn1_test");
     defer Session.logout(&conn, session) catch std.debug.print("Failed to logout", .{});
 
     const vms = try Vm.get_all(&conn, session);

@@ -31,18 +31,13 @@ pub const Conn = struct {
         //    "id":1}'
         //
         // For testing we can run locally: nc -kl 6666
-        const s = if (self.stream) |s|
-            s
-        else
-            return error.ConnectionNotInitialized;
+        const s = self.stream orelse return error.ConnectionNotInitialized;
 
+        // First the writer, send the JSON-RPC CALL
         var wbuf: [1024]u8 = undefined;
         var w = s.writer(self.io, &wbuf);
 
         // Don't use multiline, it does not produce correct escape sequence.
-        // TODO: Remove connection close, read the content lenght in the anwser
-        // and read this exact number of bytes. Connection close is only for testing.
-        // We want to keep the connection open during the session...
         const headers_fmt =
             "POST /jsonrpc HTTP/1.1\r\n" ++
             "Host: {s}\r\n" ++
@@ -50,29 +45,50 @@ pub const Conn = struct {
             "Accept: */*\r\n" ++
             "Content-Length: {d}\r\n" ++
             "Content-Type: application/json\r\n" ++
-            "Connection: close\r\n" ++
             "\r\n";
 
         try w.interface.print(headers_fmt, .{ self.hostname, body.len });
         try w.interface.writeAll(body);
         try w.interface.flush();
 
-        // TODO: See the todo above, here we just read everything. Next we need to
-        // extract the content length to read the exact number of bytes.
+        // Second, read the response now. We first read the header, extract the
+        // content length and read the body.
         var rbuf: [1024]u8 = undefined;
         var r = s.reader(self.io, &rbuf);
 
-        var response: std.ArrayList(u8) = .empty;
-        defer response.deinit(self.allocator);
+        var resp_header: std.Io.Writer.Allocating = .init(self.allocator);
+        defer resp_header.deinit();
 
-        var chunk: [1024]u8 = undefined;
         while (true) {
-            const n = try r.interface.readSliceShort(&chunk);
-            if (n == 0) break;
-            try response.appendSlice(self.allocator, chunk[0..n]);
+            const bytes_read = try r.interface.streamDelimiter(&resp_header.writer, '\n');
+            // write the delimiter and remove it from reader
+            _ = try resp_header.writer.write("\n");
+            r.interface.toss(1);
+            // Check if we are at the end of the header that is "\r\n";
+            if (bytes_read == 1) break;
         }
+        std.debug.print("= Header begin =\n{s}\n= Header end =\n", .{resp_header.written()});
 
-        std.debug.print("= Response begin =\n{s}\n= Responde end =\n", .{response.items});
+        // We should have the header now, let's check the content-length
+        var it = std.http.HeaderIterator.init(resp_header.written());
+        var content_length: ?usize = null;
+
+        while (it.next()) |h| {
+            if (std.ascii.eqlIgnoreCase(h.name, "content-length")) {
+                content_length = try std.fmt.parseInt(usize, h.value, 10);
+                break;
+            }
+        }
+        const len = content_length orelse return error.ContentLentghNotFound;
+
+        // And now we read the body
+        var resp_content: std.Io.Writer.Allocating = .init(self.allocator);
+        defer resp_content.deinit();
+
+        try r.interface.streamExact(&resp_content.writer, len);
+
+        std.debug.print("= Body begin =\n{s}\n= Body end =\n", .{resp_content.written()});
+        // TODO: extract information from body
 
         // TODO: Ugly hack to be able to compile and run basic.zig
         if (RetType == void) return;

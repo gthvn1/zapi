@@ -21,19 +21,20 @@ pub fn main(init: std.process.Init) !void {
     const Session = xapi.Class.Session;
     const Vm = xapi.Class.Vm;
 
-    var conn = try xapi.Conn.open(init.io, IPADDR, PORT);
+    var conn = try xapi.Conn.open(init.gpa, init.io, IPADDR, PORT);
     defer conn.close();
 
-    var session = try Session.login_with_password(&conn, "root", "pass", "1.0", "test");
-    defer session.logout(&conn) catch std.debug.print("Failed to logout", .{});
+    const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "gthvn1_test");
+    defer Session.logout(&conn, session) catch std.debug.print("Failed to logout", .{});
 
-    const vms = try Vm.get_all(&conn, &session);
+    const vms = try Vm.get_all(&conn, session);
     for (vms) |vm| {
-        const name = vm.get_name_label(&conn, &session);
+        const name = vm.get_name_label(&conn, session);
         std.debug.print("- {s}\n", .{name});
     }
-}
 
+    std.debug.print("Basic done\n", .{});
+}
 ```
 - For testing, setup the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`
 - If you don't have host with xapi you can see what is sent using: `nc -kl 6666`
