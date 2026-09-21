@@ -4,6 +4,69 @@
 const std = @import("std");
 const net = std.Io.net;
 
+const Response = union(enum) {
+    ok: std.json.Value,
+    not_ok: struct { code: i64, message: []const u8, data: std.json.Value },
+
+    fn getField(v: std.json.Value, key: []const u8) ?std.json.Value {
+        return switch (v) {
+            .object => |o| o.get(key),
+            else => null,
+        };
+    }
+
+    fn getString(v: std.json.Value, key: []const u8) ?[]const u8 {
+        const field = getField(v, key) orelse return null;
+        return switch (field) {
+            .string, .number_string => |s| s,
+            else => null,
+        };
+    }
+
+    fn getInt(v: std.json.Value, key: []const u8) ?i64 {
+        const field = getField(v, key) orelse return null;
+        return switch (field) {
+            .integer => |i| i,
+            else => null,
+        };
+    }
+
+    // Allocations made during this operation are not carefully tracked and may
+    // not be possible to individually clean up. It is recommended to use a
+    // std.heap.ArenaAllocator
+    fn parseJsonRpc(allocator: std.mem.Allocator, rpc: []const u8) !Response {
+        const parsed: std.json.Value = try std.json.parseFromSliceLeaky(
+            std.json.Value,
+            allocator,
+            rpc,
+            .{},
+        );
+
+        // Check if it is an error. Not that JSON-RPC 1.0 allows "
+        // error: null".
+        if (getField(parsed, "error")) |e| {
+            if (e != .null) {
+                const code = getInt(e, "code") orelse return error.CodeMissing;
+                const msg = getString(e, "message") orelse return error.MsgMissing;
+                const data: std.json.Value = getField(e, "data") orelse .null;
+                return .{ .not_ok = .{
+                    .code = code,
+                    .message = msg,
+                    .data = data,
+                } };
+            }
+        }
+
+        if (getField(parsed, "result")) |result| {
+            return .{
+                .ok = result,
+            };
+        }
+
+        return error.InvalidResponse;
+    }
+};
+
 pub const Conn = struct {
     stream: ?net.Stream = null,
     allocator: std.mem.Allocator,
@@ -88,7 +151,18 @@ pub const Conn = struct {
         try r.interface.streamExact(&resp_content.writer, len);
 
         std.debug.print("= Body begin =\n{s}\n= Body end =\n", .{resp_content.written()});
+
         // TODO: extract information from body
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const response = try Response.parseJsonRpc(arena.allocator(), resp_content.written());
+        switch (response) {
+            .ok => std.debug.print("Successfully parsed JSON RPC\n", .{}),
+            .not_ok => |e| {
+                std.debug.print("Got error {d}:{s}\n", .{ e.code, e.message });
+                return error.CallFailed;
+            },
+        }
 
         // TODO: Ugly hack to be able to compile and run basic.zig
         if (RetType == void) return;
@@ -97,7 +171,6 @@ pub const Conn = struct {
     }
 };
 
-// TODO: This part will be all generated classes.
 fn writeRpcRequest(gpa: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);
     var w: std.json.Stringify = .{ .writer = &out.writer };
