@@ -152,22 +152,25 @@ pub const Conn = struct {
 
         std.debug.print("= Body begin =\n{s}\n= Body end =\n", .{resp_content.written()});
 
-        // TODO: extract information from body
+        // TODO: extract information from response if type is not void
+
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
         const response = try Response.parseJsonRpc(arena.allocator(), resp_content.written());
-        switch (response) {
-            .ok => std.debug.print("Successfully parsed JSON RPC\n", .{}),
+        const result = switch (response) {
+            .ok => |v| v,
             .not_ok => |e| {
                 std.debug.print("Got error {d}:{s}\n", .{ e.code, e.message });
                 return error.CallFailed;
             },
-        }
+        };
 
-        // TODO: Ugly hack to be able to compile and run basic.zig
         if (RetType == void) return;
-        if (RetType == Class.SessionRef) return .{ .ref = "OpaqueRef:stub" };
-        return undefined;
+        // TODO: implement jsonParseFromValue for RetType
+        // See https://ziglang.org/documentation/master/std/#std.json.static.innerParseFromValue
+        const decoded_resp = try std.json.parseFromValueLeaky(RetType, arena.allocator(), result, .{});
+        std.debug.print("call is returning: {any}\n", .{decoded_resp});
+        return decoded_resp;
     }
 };
 
