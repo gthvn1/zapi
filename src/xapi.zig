@@ -69,23 +69,31 @@ const Response = union(enum) {
 
 pub const Conn = struct {
     stream: ?net.Stream = null,
-    allocator: std.mem.Allocator,
+    allocator: std.mem.Allocator, // This can by use to create local arena for leaky allocation
+    arena: std.heap.ArenaAllocator,
     io: std.Io,
     hostname: []const u8,
 
     pub fn open(allocator: std.mem.Allocator, io: std.Io, hostname: []const u8, port: u16) !Conn {
         const peer = try net.IpAddress.parseIp4(hostname, port);
         const conn = try peer.connect(io, .{ .mode = .stream });
-        return .{ .stream = conn, .allocator = allocator, .io = io, .hostname = hostname };
+        return .{
+            .stream = conn,
+            .allocator = allocator,
+            .arena = std.heap.ArenaAllocator.init(allocator),
+            .io = io,
+            .hostname = hostname,
+        };
     }
 
     pub fn close(self: *Conn) void {
+        self.arena.deinit();
         if (self.stream) |stream| {
             stream.close(self.io);
         }
     }
 
-    fn call(self: *const Conn, comptime RetType: type, body: []u8) !RetType {
+    fn call(self: *Conn, comptime RetType: type, body: []u8) !RetType {
         // We want to send:
         //❯ curl -v http://localhost/jsonrpc -d '{
         //    "jsonrpc":"2.0",
@@ -95,6 +103,16 @@ pub const Conn = struct {
         //
         // For testing we can run locally: nc -kl 6666
         const s = self.stream orelse return error.ConnectionNotInitialized;
+
+        // Currently only allow void and SessionRef... So just through an error at
+        // compile time if something else is passed.
+        // Note that some RefType like []const u8 have an already working
+        // jsonParseFromValue but you maybe need to pass an option to always allocate...
+        // See .{ .allocate = .alloc_always }
+        comptime {
+            if (RetType != void and RetType != Class.SessionRef)
+                @compileError("call: unhandled RetType" ++ @typeName(RetType));
+        }
 
         // First the writer, send the JSON-RPC CALL
         var wbuf: [1024]u8 = undefined;
@@ -154,9 +172,9 @@ pub const Conn = struct {
 
         // TODO: extract information from response if type is not void
 
-        var arena = std.heap.ArenaAllocator.init(self.allocator);
-        defer arena.deinit();
-        const response = try Response.parseJsonRpc(arena.allocator(), resp_content.written());
+        var local_arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer local_arena.deinit();
+        const response = try Response.parseJsonRpc(local_arena.allocator(), resp_content.written());
         const result = switch (response) {
             .ok => |v| v,
             .not_ok => |e| {
@@ -168,9 +186,7 @@ pub const Conn = struct {
         if (RetType == void) return;
         // TODO: implement jsonParseFromValue for RetType
         // See https://ziglang.org/documentation/master/std/#std.json.static.innerParseFromValue
-        const decoded_resp = try std.json.parseFromValueLeaky(RetType, arena.allocator(), result, .{});
-        std.debug.print("call is returning: {any}\n", .{decoded_resp});
-        return decoded_resp;
+        return try std.json.parseFromValueLeaky(RetType, self.arena.allocator(), result, .{});
     }
 };
 
@@ -201,6 +217,19 @@ pub const Class = struct {
         return struct {
             ref: []const u8,
             pub const class_name = classname;
+
+            pub fn jsonParseFromValue(allocator: std.mem.Allocator, src: std.json.Value, opts: std.json.ParseOptions) !@This() {
+                _ = opts;
+                // We are expecting "OpaqueRef:6206e66c-9cd1-561c-1519-6ce38cd41dfe"
+                // src has been allocated from local arena, so we need to dupe
+                switch (src) {
+                    .string => |s| {
+                        std.debug.print("custom: {s}\n", .{s});
+                        return .{ .ref = try allocator.dupe(u8, s) };
+                    },
+                    else => return std.json.ParseFromValueError.UnexpectedToken,
+                }
+            }
         };
     }
 
@@ -209,7 +238,7 @@ pub const Class = struct {
 
     pub const Session = struct {
         pub fn login_with_password(
-            conn: *const Conn,
+            conn: *Conn,
             uname: []const u8,
             pwd: []const u8,
             version: []const u8,
@@ -229,7 +258,7 @@ pub const Class = struct {
             const params: [1][]const u8 = .{session.ref};
             const body = try writeRpcRequest(conn.allocator, "session.logout", &params, 1);
             defer conn.allocator.free(body);
-            try conn.call(void, body);
+            return conn.call(void, body);
         }
     };
 
