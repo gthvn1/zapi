@@ -55,15 +55,4 @@ pub fn build(b: *std.Build) void {
     });
     basic_exe.root_module.addImport("xapi", xapi_mod);
     b.installArtifact(basic_exe);
-
-    // This is use for testing
-    const sandbox = b.addExecutable(.{
-        .name = "sandbox",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("sandbox/main.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    b.installArtifact(sandbox);
 }
