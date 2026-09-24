@@ -104,13 +104,13 @@ pub const Conn = struct {
         // For testing we can run locally: nc -kl 6666
         const s = self.stream orelse return error.ConnectionNotInitialized;
 
-        // Currently only allow void and SessionRef... So just through an error at
+        // Currently only allow void and Session... So just through an error at
         // compile time if something else is passed.
         // Note that some RefType like []const u8 have an already working
         // jsonParseFromValue but you maybe need to pass an option to always allocate...
         // See .{ .allocate = .alloc_always }
         comptime {
-            if (RetType != void and RetType != Class.SessionRef)
+            if (RetType != void and RetType != Class.Session)
                 @compileError("call: unhandled RetType" ++ @typeName(RetType));
         }
 
@@ -213,12 +213,9 @@ fn writeRpcRequest(gpa: std.mem.Allocator, method: []const u8, params: []const [
 }
 
 pub const Class = struct {
-    fn OpaqueRef(comptime classname: []const u8) type {
+    fn OpaqueRef(comptime T: type) type {
         return struct {
-            ref: []const u8,
-            pub const class_name = classname;
-
-            pub fn jsonParseFromValue(allocator: std.mem.Allocator, src: std.json.Value, opts: std.json.ParseOptions) !@This() {
+            pub fn jsonParseFromValue(allocator: std.mem.Allocator, src: std.json.Value, opts: std.json.ParseOptions) !T {
                 _ = opts;
                 // We are expecting "OpaqueRef:6206e66c-9cd1-561c-1519-6ce38cd41dfe"
                 // src has been allocated from local arena, so we need to dupe
@@ -233,9 +230,6 @@ pub const Class = struct {
         };
     }
 
-    pub const SessionRef = OpaqueRef("session");
-    pub const VmRef = OpaqueRef("vm");
-
     // From raw parsing we see that:
     // ClassInfo: session
     //   ...
@@ -245,25 +239,31 @@ pub const Class = struct {
     //   ...
     //   logout (session_id: session ref) -> void
     pub const Session = struct {
+        ref: []const u8,
+        pub const jsonParseFromValue = OpaqueRef(Session).jsonParseFromValue;
+
         pub fn login_with_password(
             conn: *Conn,
             uname: []const u8,
             pwd: []const u8,
             version: []const u8,
             originator: []const u8,
-        ) !SessionRef {
+        ) !Session {
             const params: [4][]const u8 = .{ uname, pwd, version, originator };
             const body = try writeRpcRequest(conn.allocator, "session.login_with_password", &params, 1);
             defer conn.allocator.free(body);
-            return conn.call(SessionRef, body);
+            return conn.call(Session, body);
         }
 
         // TODO: we can probably detect that a parameter is the class
         // and so put it first before the conn. To be checked but it
         // looks like the API already named "self" the parameter that
-        // is the class... so we can rely on that probably.
-        pub fn logout(conn: *Conn, session: SessionRef) !void {
-            const params: [1][]const u8 = .{session.ref};
+        // is the class... so we can rely on that probably. We can probably
+        // also consider session_id as a special case since it is still needed.
+        // So put self first, otherwise session_id, otherwise conn (something like
+        // that)...
+        pub fn logout(session_id: Session, conn: *Conn) !void {
+            const params: [1][]const u8 = .{session_id.ref};
             const body = try writeRpcRequest(conn.allocator, "session.logout", &params, 1);
             defer conn.allocator.free(body);
             return conn.call(void, body);
@@ -279,20 +279,24 @@ pub const Class = struct {
     //   ...
     //   get_name_label (session_id: session ref, self: VM ref) -> string
     pub const Vm = struct {
+        ref: []const u8,
+        pub const jsonParseFromValue = OpaqueRef(Vm).jsonParseFromValue;
 
         // TODO: fake VM ref set with array of VM for now
-        pub fn get_all(conn: *Conn, session: SessionRef) ![]VmRef {
+        pub fn get_all(conn: *Conn, session: Session) ![]Vm {
             // TODO: call RPC
             _ = conn;
             _ = session;
-            return &[_]VmRef{};
+            return &[_]Vm{};
         }
 
-        pub fn get_name_label(self: *VmRef, conn: *Conn, session: SessionRef) []const u8 {
+        // NOTE: for generator, if we have self in the list of parameter it can
+        // come first.
+        pub fn get_name_label(self: Vm, conn: *Conn, session_id: Session) []const u8 {
             // TODO: call RPC
             _ = self;
             _ = conn;
-            _ = session;
+            _ = session_id;
             return "todo";
         }
     };
