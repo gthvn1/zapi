@@ -20,6 +20,13 @@ const Point = struct {
     pub fn double(self: Point) i64 {
         return 2 * self.x;
     }
+
+    pub const describe = Mixin(@This()).describe;
+};
+
+const Circle = struct {
+    x: i32,
+    pub const describe = Mixin(@This()).describe;
 };
 
 fn Mixin(comptime T: type) type {
@@ -39,5 +46,8 @@ pub fn main() !void {
 
     const DescPoint = Mixin(Point);
     DescPoint.describe(p);
-    //p.describe(); // won't compile because there is no describe in Point namespace.
+    p.describe();
+
+    const c = Circle{ .x = 12 };
+    c.describe();
 }
