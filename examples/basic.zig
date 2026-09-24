@@ -15,8 +15,8 @@ pub fn main(init: std.process.Init) !void {
     defer Session.logout(&conn, session) catch std.debug.print("Failed to logout", .{});
 
     const vms = try Vm.get_all(&conn, session);
-    for (vms) |vm| {
-        const name = vm.get_name_label(&conn, session);
+    for (vms) |*vm| {
+        const name = Vm.get_name_label(vm, &conn, session);
         std.debug.print("- {s}\n", .{name});
     }
 

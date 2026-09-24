@@ -234,8 +234,16 @@ pub const Class = struct {
     }
 
     pub const SessionRef = OpaqueRef("session");
-    pub const VmRef = OpaqueRef("VM");
+    pub const VmRef = OpaqueRef("vm");
 
+    // From raw parsing we see that:
+    // ClassInfo: session
+    //   ...
+    // Messages:
+    //   ...
+    //   login_with_password (uname: string, pwd: string, version: string, originator: string) -> session ref
+    //   ...
+    //   logout (session_id: session ref) -> void
     pub const Session = struct {
         pub fn login_with_password(
             conn: *Conn,
@@ -262,17 +270,25 @@ pub const Class = struct {
         }
     };
 
+    // From raw parsing we see that:
+    // ClassInfo: VM
+    //   ...
+    // Messages:
+    //   ...
+    //   get_all (session_id: sesssion ref) -> VM ref set
+    //   ...
+    //   get_name_label (session_id: session ref, self: VM ref) -> string
     pub const Vm = struct {
 
         // TODO: fake VM ref set with array of VM for now
-        pub fn get_all(conn: *Conn, session: SessionRef) ![]*Vm {
+        pub fn get_all(conn: *Conn, session: SessionRef) ![]VmRef {
             // TODO: call RPC
             _ = conn;
             _ = session;
-            return &[_]*Vm{};
+            return &[_]VmRef{};
         }
 
-        pub fn get_name_label(self: *Vm, conn: *Conn, session: SessionRef) []const u8 {
+        pub fn get_name_label(self: *VmRef, conn: *Conn, session: SessionRef) []const u8 {
             // TODO: call RPC
             _ = self;
             _ = conn;
