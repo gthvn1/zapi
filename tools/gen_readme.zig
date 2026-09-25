@@ -7,10 +7,6 @@ const std = @import("std");
 // have an uptodate README
 
 pub fn main(init: std.process.Init) !void {
-    // We are using an arena allocator. As init gives it to us
-    // we don't need to free anything.
-    const a = init.arena.allocator();
-
     // For debug purpose we can use stdout for printing
     var out_buf: [1024]u8 = undefined;
     var out_file: std.Io.File.Writer = .init(std.Io.File.stdout(), init.io, &out_buf);
@@ -32,29 +28,32 @@ pub fn main(init: std.process.Init) !void {
     var freader = f.reader(init.io, &fbuf);
     const fin = &freader.interface;
 
-    // We will now read the file line by line.
-    var content: std.ArrayList([]const u8) = .empty;
+    // We will write the new file in "content".
+    var content: std.Io.Writer.Allocating = .init(init.gpa);
+    defer content.deinit();
+
     var outside_block = true;
 
     while (try fin.takeDelimiter('\n')) |line| {
         if (std.mem.find(u8, line, "<!-- BEGIN_CODE")) |_| {
             // TODO: extract the name of the file
-            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
-            try content.append(a, "```zig\n");
+            try content.writer.print("{s}\n", .{line});
+            try content.writer.writeAll("```zig\n");
             outside_block = false;
             // TODO: copy the content of the code
             continue;
         }
 
         if (std.mem.find(u8, line, "<!-- END_CODE")) |_| {
-            try content.append(a, "```\n");
-            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
+            // TODO: check that name is matching the BEGIN CODE
+            try content.writer.writeAll("```\n");
+            try content.writer.print("{s}\n", .{line});
             outside_block = true;
             continue;
         }
 
         if (outside_block) {
-            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
+            try content.writer.print("{s}\n", .{line});
         }
         // if inside block we have nothing to do since we already have the code
 
@@ -62,10 +61,8 @@ pub fn main(init: std.process.Init) !void {
 
     // Currently just print new_out to stdout
     try stdout.writeAll("---\n");
+    try stdout.writeAll(content.written());
 
-    for (content.items) |line| {
-        try stdout.writeAll(line);
-    }
     // Don't forget to flush
     try stdout.flush();
 }
