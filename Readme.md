@@ -9,6 +9,8 @@ Generates bindings for Zig following the approach introduced in [xapy](https://g
     4. [ ] Tokenize + parse type strings -> real AST for every type field, replacing the raw strings.
     5. [ ] Code generation -> walk the now-typed IR and emit Zig source (structs + sync call functions).
 - See an example of expected usage `./examples/basic.zig`:
+
+<!-- BEGIN_CODE example/basic.zig -->
 ```zig
 const std = @import("std");
 const xapi = @import("xapi");
@@ -35,6 +37,8 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("Basic done\n", .{});
 }
 ```
+<!-- END_CODE example/basic.zig -->
+
 - If you have a running XAPI, with creds, you should see:
 ```bash
 ❯ ./zig-out/bin/basic
