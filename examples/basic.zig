@@ -16,7 +16,7 @@ pub fn main(init: std.process.Init) !void {
 
     const vms = try Vm.get_all(&conn, session);
     for (vms) |vm| {
-        const name = vm.get_name_label(&conn, session);
+        const name = try vm.get_name_label(&conn, session);
         std.debug.print("- {s}\n", .{name});
     }
 

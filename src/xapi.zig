@@ -110,7 +110,7 @@ pub const Conn = struct {
         // jsonParseFromValue but you maybe need to pass an option to always allocate...
         // See .{ .allocate = .alloc_always }
         comptime {
-            if (RetType != void and RetType != Class.Session and RetType != []Class.Vm)
+            if (RetType != void and RetType != Class.Session and RetType != []Class.Vm and RetType != []const u8)
                 @compileError("call: unhandled RetType" ++ @typeName(RetType));
         }
 
@@ -291,12 +291,11 @@ pub const Class = struct {
 
         // NOTE: for generator, if we have self in the list of parameter it can
         // come first.
-        pub fn get_name_label(self: Vm, conn: *Conn, session_id: Session) []const u8 {
-            // TODO: call RPC
-            _ = self;
-            _ = conn;
-            _ = session_id;
-            return "todo";
+        pub fn get_name_label(self: Vm, conn: *Conn, session_id: Session) ![]const u8 {
+            const params: [2][]const u8 = .{ session_id.ref, self.ref };
+            const body = try writeRpcRequest(conn.allocator, "VM.get_name_label", &params, 1);
+            defer conn.allocator.free(body);
+            return conn.call([]const u8, body);
         }
     };
 };

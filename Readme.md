@@ -5,7 +5,7 @@ Generates bindings for Zig following the approach introduced in [xapy](https://g
 - Status
     1. [x] JSON Parse -> generic `std.json.Value`
     2. [x] Extract to IR ([raw_xapi.zig](https://github.com/gthvn1/zapi/blob/master/src/raw_xapi.zig)) -> ClassInfo/FieldInfo/MessageInfo: a domain representation that still keeps raw strings.
-    3. [ ] Write `src/xapi.zig` by hand to have a working basic example that works and understand how to wire things.
+    3. [x] Write `src/xapi.zig` by hand to have a working basic example that works and understand how to wire things.
     4. [ ] Tokenize + parse type strings -> real AST for every type field, replacing the raw strings.
     5. [ ] Code generation -> walk the now-typed IR and emit Zig source (structs + sync call functions).
 - See an example of expected usage `./examples/basic.zig`:
@@ -24,7 +24,7 @@ pub fn main(init: std.process.Init) !void {
     defer conn.close();
 
     const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "gthvn1_test");
-    defer Session.logout(&conn, session) catch std.debug.print("Failed to logout\n", .{});
+    defer session.logout(&conn) catch std.debug.print("Failed to logout\n", .{});
 
     const vms = try Vm.get_all(&conn, session);
     for (vms) |vm| {
