@@ -7,11 +7,16 @@ const std = @import("std");
 // have an uptodate README
 
 pub fn main(init: std.process.Init) !void {
+    // We are using an arena allocator. As init gives it to us
+    // we don't need to free anything.
+    const a = init.arena.allocator();
+
     // For debug purpose we can use stdout for printing
     var out_buf: [1024]u8 = undefined;
     var out_file: std.Io.File.Writer = .init(std.Io.File.stdout(), init.io, &out_buf);
     const stdout = &out_file.interface;
 
+    // Get the filename from the arguments
     var args_it = init.minimal.args.iterate();
     // First parameter is the name of the program, skip it
     _ = args_it.next();
@@ -25,22 +30,42 @@ pub fn main(init: std.process.Init) !void {
 
     var fbuf: [1024]u8 = undefined;
     var freader = f.reader(init.io, &fbuf);
+    const fin = &freader.interface;
 
-    const flen = try f.length(init.io);
-    try stdout.print("Read {d} bytes\n", .{flen});
+    // We will now read the file line by line.
+    var content: std.ArrayList([]const u8) = .empty;
+    var outside_block = true;
 
-    const content = try freader.interface.readAlloc(init.gpa, @as(usize, flen));
-    defer init.gpa.free(content);
+    while (try fin.takeDelimiter('\n')) |line| {
+        if (std.mem.find(u8, line, "<!-- BEGIN_CODE")) |_| {
+            // TODO: extract the name of the file
+            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
+            try content.append(a, "```zig\n");
+            outside_block = false;
+            // TODO: copy the content of the code
+            continue;
+        }
 
-    const begin_idx = std.mem.find(u8, content, "BEGIN_CODE") orelse return;
-    const end_idx = std.mem.find(u8, content, "END_CODE") orelse return error.EndCodeNotFound;
+        if (std.mem.find(u8, line, "<!-- END_CODE")) |_| {
+            try content.append(a, "```\n");
+            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
+            outside_block = true;
+            continue;
+        }
 
-    try stdout.print("Find Begin at offset {d}\n", .{begin_idx});
-    try stdout.print("Find End at offset {d}\n", .{end_idx});
+        if (outside_block) {
+            try content.append(a, try std.mem.concat(a, u8, &[_][]const u8{ line, "\n" }));
+        }
+        // if inside block we have nothing to do since we already have the code
 
-    // TODO: we have the offsets, now we probably want to have the begin line and end line to
-    // get the name of the function that we need to insert here.
+    }
 
+    // Currently just print new_out to stdout
+    try stdout.writeAll("---\n");
+
+    for (content.items) |line| {
+        try stdout.writeAll(line);
+    }
     // Don't forget to flush
     try stdout.flush();
 }
