@@ -110,7 +110,7 @@ pub const Conn = struct {
         // jsonParseFromValue but you maybe need to pass an option to always allocate...
         // See .{ .allocate = .alloc_always }
         comptime {
-            if (RetType != void and RetType != Class.Session)
+            if (RetType != void and RetType != Class.Session and RetType != []Class.Vm)
                 @compileError("call: unhandled RetType" ++ @typeName(RetType));
         }
 
@@ -282,12 +282,11 @@ pub const Class = struct {
         ref: []const u8,
         pub const jsonParseFromValue = OpaqueRef(Vm).jsonParseFromValue;
 
-        // TODO: fake VM ref set with array of VM for now
-        pub fn get_all(conn: *Conn, session: Session) ![]Vm {
-            // TODO: call RPC
-            _ = conn;
-            _ = session;
-            return &[_]Vm{};
+        pub fn get_all(conn: *Conn, session_id: Session) ![]Vm {
+            const params: [1][]const u8 = .{session_id.ref};
+            const body = try writeRpcRequest(conn.allocator, "VM.get_all", &params, 1);
+            defer conn.allocator.free(body);
+            return conn.call([]Vm, body);
         }
 
         // NOTE: for generator, if we have self in the list of parameter it can
