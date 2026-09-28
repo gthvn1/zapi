@@ -10,7 +10,7 @@ Generates bindings for Zig following the approach introduced in [xapy](https://g
     5. [ ] Code generation -> walk the now-typed IR and emit Zig source (structs + sync call functions).
 - See an example of expected usage `./examples/basic.zig`:
 
-<!-- BEGIN_CODE[examples/basic.zig] -->
+<!-- BEGIN_CODE [examples/basic.zig] -->
 ```zig
 const std = @import("std");
 const xapi = @import("xapi");
@@ -37,10 +37,11 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("Basic done\n", .{});
 }
 ```
-<!-- END_CODE[examples/basic.zig] -->
+<!-- END_CODE [examples/basic.zig] -->
 
 - If you have a running XAPI, with creds, you should see:
-```bash
+<!-- BEGIN_CODE [examples/basic_output] -->
+```
 ❯ ./zig-out/bin/basic
 = Header begin =
 HTTP/1.1 200 OK
@@ -73,6 +74,8 @@ Access-Control-Allow-Headers: X-Requested-With
 {"jsonrpc":"2.0","result":"","id":1}
 = Body end =
 ```
+<!-- END_CODE [examples/basic_output] -->
+
 
 # Tips
 - For testing, set up the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`

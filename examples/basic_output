@@ -1,0 +1,31 @@
+❯ ./zig-out/bin/basic
+= Header begin =
+HTTP/1.1 200 OK
+content-length: 82
+connection: keep-alive
+cache-control: no-cache, no-store
+content-type: application/json
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Headers: X-Requested-With
+
+
+= Header end =
+= Body begin =
+{"jsonrpc":"2.0","result":"OpaqueRef:74f6c79a-667f-1d96-8db5-dd9d7f61798c","id":1}
+= Body end =
+custom: OpaqueRef:74f6c79a-667f-1d96-8db5-dd9d7f61798c
+Basic done
+= Header begin =
+HTTP/1.1 200 OK
+content-length: 36
+connection: keep-alive
+cache-control: no-cache, no-store
+content-type: application/json
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Headers: X-Requested-With
+
+
+= Header end =
+= Body begin =
+{"jsonrpc":"2.0","result":"","id":1}
+= Body end =
