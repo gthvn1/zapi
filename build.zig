@@ -55,4 +55,20 @@ pub fn build(b: *std.Build) void {
     });
     basic_exe.root_module.addImport("xapi", xapi_mod);
     b.installArtifact(basic_exe);
+
+    // Update the Readme.md if basic.zig is build
+    const gen_readme = b.addExecutable(.{
+        .name = "gen_readme",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/gen_readme.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const run_gen = b.addRunArtifact(gen_readme);
+    run_gen.addArg("Readme.md");
+    // When run_gen runs we build baic_exe to ensure that the example is working
+    run_gen.step.dependOn(&basic_exe.step);
+    // As gen_readme is idempotent we can run it for each build
+    b.getInstallStep().dependOn(&run_gen.step);
 }
