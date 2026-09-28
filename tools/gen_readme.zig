@@ -21,6 +21,12 @@ fn extractFileName(str: []const u8) ?[]const u8 {
     return std.mem.trim(u8, fname, " \t");
 }
 
+/// Returns the file extension if found, empty otherwise.
+fn getFileExtension(path: []const u8) []const u8 {
+    const ext = std.fs.path.extension(path);
+    return if (ext.len > 1) ext[1..] else "";
+}
+
 fn insertCode(w: *std.Io.Writer, io: std.Io, code: []const u8) !void {
     const f = try std.Io.Dir.cwd().openFile(io, code, .{});
     defer f.close(io);
@@ -74,7 +80,7 @@ pub fn main(init: std.process.Init) !void {
 
             // We keep the begin tag
             try w.print("{s}\n", .{line});
-            try w.writeAll("```zig\n");
+            try w.print("```{s}\n", .{getFileExtension(code_path)});
             try insertCode(w, io, code_path);
             // Don't add the closing fence to the last line of code.
             if (!std.mem.endsWith(u8, out.written(), "\n")) try w.writeByte('\n');
