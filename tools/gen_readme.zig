@@ -54,25 +54,27 @@ pub fn main(init: std.process.Init) !void {
 
     while (try fin.takeDelimiter('\n')) |line| {
         if (std.mem.find(u8, line, "<!-- BEGIN_CODE")) |_| {
+            if (code_block != null) return error.NestedCodeBlockUnsupported;
+
+            // We keep the BEGIN_CODE tag
             try content.writer.print("{s}\n", .{line});
             try content.writer.writeAll("```zig\n");
-            // TODO: Fix the bug. Currently code_block is a pointer to fbuf and a length. So
-            // right now it points to the filename of the code. But later we want to check that
-            // end_block is the same filename. But at this time the fbuf will be different and
-            // so code_block will be what is at the same address in fbuf but it won't be the
-            // filename. So we need to keep a copy here and free it once checked with END_CODE.
-            code_block = extractFileName(line) orelse return error.FailedToReadCodeFromBegin;
+            const code_path = extractFileName(line) orelse return error.FailedToReadCodeFromBegin;
+            code_block = try init.gpa.dupe(u8, code_path);
             try insertCode(&content.writer, init.io, code_block.?);
             continue;
         }
 
         if (std.mem.find(u8, line, "<!-- END_CODE")) |_| {
-            // TODO: check that name is matching the BEGIN CODE
-            // Sanity check
             const code = extractFileName(line) orelse return error.FailedToReadCodeFromEnd;
-            if ((std.mem.eql(u8, code, code_block.?))) return error.MatchingFailedWithEndCode;
+
+            // Sanity check
+            if (code_block == null) return error.EndBlockWithoutBeginBlock;
+            if (!(std.mem.eql(u8, code, code_block.?))) return error.MatchingFailedWithEndCode;
             try content.writer.writeAll("```\n");
+            // Keep the END_BLOCK tag
             try content.writer.print("{s}\n", .{line});
+            init.gpa.free(code_block.?);
             code_block = null;
             continue;
         }
