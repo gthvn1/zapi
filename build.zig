@@ -67,8 +67,10 @@ pub fn build(b: *std.Build) void {
     });
     const run_gen = b.addRunArtifact(gen_readme);
     run_gen.addArg("Readme.md");
-    // When run_gen runs we build baic_exe to ensure that the example is working
+    // Only run gen_readme if basic_exe compiles.
     run_gen.step.dependOn(&basic_exe.step);
-    // As gen_readme is idempotent we can run it for each build
+    // As gen_readme is idempotent we can run it for each build. We don't need to
+    // install it, we just need to run it when installing other things (basic_exe,
+    // and zapi). So that is why we don't do b.installArtifact(gen_readme).
     b.getInstallStep().dependOn(&run_gen.step);
 }
