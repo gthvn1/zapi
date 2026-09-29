@@ -39,12 +39,12 @@ const Response = union(enum) {
             .{},
         );
 
-        // Check if it is an error. Not that JSON-RPC 1.0 allows "
+        // Check if it is an error. Note that JSON-RPC 1.0 allows "
         // error: null".
         if (getField(parsed, "error")) |e| {
             if (e != .null) {
-                const code = getInt(e, "code") orelse return error.CodeMissing;
-                const msg = getString(e, "message") orelse return error.MsgMissing;
+                const code = getInt(e, "code") orelse return error.CodeIsMissing;
+                const msg = getString(e, "message") orelse return error.MsgIsMissing;
                 const data: std.json.Value = getField(e, "data") orelse .null;
                 return .{ .not_ok = .{
                     .code = code,
@@ -150,7 +150,7 @@ pub fn call(conn: *Conn, comptime RetType: type, body: []u8) !RetType {
             break;
         }
     }
-    const len = content_length orelse return error.ContentLentghNotFound;
+    const len = content_length orelse return error.ContentLengthIsMissing;
 
     // And now we read the body
     var resp_content: std.Io.Writer.Allocating = .init(conn.allocator);

@@ -50,7 +50,7 @@ const Args = union(enum) {
 
             if (try fromString(arg)) |m| switch (m) {
                 .emit, .raw => {
-                    if (mode != null) return error.ModeSetMultipleTime;
+                    if (mode != null) return error.ModeSetMultipleTimes;
                     mode = m;
                 },
             } else {
@@ -59,7 +59,7 @@ const Args = union(enum) {
             }
         }
 
-        const file_name = fname orelse return error.FileNameIsNotSet;
+        const file_name = fname orelse return error.FileNameIsMissing;
         return .{
             .run = .{
                 .mode = mode,
