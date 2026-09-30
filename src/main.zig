@@ -2,7 +2,7 @@ const std = @import("std");
 const json = std.json;
 const Io = std.Io;
 
-const raw_api = @import("raw_xapi.zig");
+const RawXapi = @import("RawXapi.zig");
 const emit = @import("emit.zig");
 
 const Args = union(enum) {
@@ -101,7 +101,7 @@ pub fn main(init: std.process.Init) !void {
             defer parsed.deinit();
 
             // 2. Extract parsed value into an intermediate representation.
-            var rapi = raw_api.init(gpa);
+            var rapi = RawXapi.init(gpa);
             defer rapi.deinit();
 
             try rapi.parse(parsed.value);
@@ -111,7 +111,7 @@ pub fn main(init: std.process.Init) !void {
                 .emit => {
                     // TODO: we need to call the emitter. The raw API will be passed to it and it will
                     //       use the type_parser().
-                    try emit.xapi_bindings(stdout_writer);
+                    try emit.xapi_bindings(stdout_writer, &rapi);
                 },
                 .raw => try rapi.dump(stdout_writer),
             }
