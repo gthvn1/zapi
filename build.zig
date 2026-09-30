@@ -33,7 +33,6 @@ pub fn build(b: *std.Build) void {
 
     // Run step for unit tests
     const run_test = b.addRunArtifact(parser_test);
-
     const test_step = b.step("test", "Run parser tests");
     test_step.dependOn(&run_test.step);
 
