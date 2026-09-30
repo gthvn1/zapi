@@ -19,9 +19,9 @@ pub fn build(b: *std.Build) void {
     // We can now do: zig build --watch --summary all
     // and run it: ./zig-out/bin/zapi
 
-    // Add the possibility to run tests from src/type_parser.zig
+    // Add the possibility to run tests from src/TypeParser.zig
     const parser_mod = b.createModule(.{
-        .root_source_file = b.path("src/type_parser.zig"),
+        .root_source_file = b.path("src/TypeParser.zig"),
         .target = target,
         .optimize = optimize,
     });

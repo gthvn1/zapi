@@ -5,12 +5,12 @@ Generates XAPI bindings for Zig following the approach introduced in [xapy](http
 - Emit the code (WIP): `./zig-out/bin/zapi -e xenapi.json > /tmp/xapi.zig && zig ast-check /tmp/xapi.zig`
 - Status
     1. [x] JSON Parse -> generic `std.json.Value`
-    2. [x] Extract to IR ([raw_xapi.zig](https://github.com/gthvn1/zapi/blob/master/src/raw_xapi.zig)) -> ClassInfo/FieldInfo/MessageInfo: a domain representation that still keeps raw strings.
+    2. [x] Extract to IR ([RawXapi.zig](https://github.com/gthvn1/zapi/blob/master/src/RawXapi.zig)) -> ClassInfo/FieldInfo/MessageInfo: a domain representation that still keeps raw strings.
     3. [x] Write `src/xapi.zig` by hand to have a working basic example to understand how to wire things.
     4. [ ] Tokenize + parse type strings -> real AST, replacing the raw strings.
     5. [ ] Code generation -> walk the now-typed IR and emit Zig source (structs + sync call functions).
 - The pipeline is:
-    - `xenapi.json -> raw_xapi (ClassInfo) -> type_parser (Zig types) -> emitter (text) -> generated xapi.zig`
+    - `xenapi.json -> RawXapi (ClassInfo) -> TypeParser (Zig types) -> emitter (text) -> generated xapi.zig`
 
 - See an example of expected usage `./examples/basic.zig`:
 
