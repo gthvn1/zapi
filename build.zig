@@ -27,14 +27,24 @@ pub fn build(b: *std.Build) void {
     });
 
     // Compile test step, it creates the executable containing unit tests
-    const parser_test = b.addTest(.{
-        .root_module = parser_mod,
+    const parser_test = b.addTest(.{ .root_module = parser_mod });
+    const run_parser_test = b.addRunArtifact(parser_test);
+
+    // We have test for emit as well
+    const emit_mod = b.createModule(.{
+        .root_source_file = b.path("src/emit.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
+    // Compile test step, it creates the executable containing unit tests
+    const emit_test = b.addTest(.{ .root_module = emit_mod });
+    const run_emit_test = b.addRunArtifact(emit_test);
+
     // Run step for unit tests
-    const run_test = b.addRunArtifact(parser_test);
-    const test_step = b.step("test", "Run parser tests");
-    test_step.dependOn(&run_test.step);
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_parser_test.step);
+    test_step.dependOn(&run_emit_test.step);
 
     // We create a module for the xapi file. This file will be
     // used by the examples.

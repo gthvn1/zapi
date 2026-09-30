@@ -15,3 +15,36 @@ pub fn xapi_bindings(w: *std.Io.Writer, rapi: *const RawXapi) !void {
     try w.writeAll("// We want Conn to be visible from client, so we need to reexport it\n");
     try w.writeAll("pub const Conn = rpc.Connection;\n");
 }
+
+fn writeClassName(w: *std.Io.Writer, name: []const u8) !void {
+    var it = std.mem.splitScalar(u8, name, '_');
+    while (it.next()) |s| {
+        if (s.len == 0) continue;
+        try w.writeByte(std.ascii.toUpper(s[0]));
+        for (s[1..]) |c| {
+            try w.writeByte(std.ascii.toLower(c));
+        }
+    }
+}
+
+// Helper for tests
+fn expectClassName(expected: []const u8, input: []const u8) !void {
+    var buf: [64]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buf);
+    try writeClassName(&w, input);
+    try std.testing.expectEqualStrings(expected, w.buffered());
+}
+
+test "class name conversion" {
+    try expectClassName("Session", "session");
+    try expectClassName("Vm", "VM");
+    try expectClassName("VmGroup", "VM_group");
+    try expectClassName("Vmpp", "VMPP");
+    try expectClassName("SrStat", "sr_stat");
+    try expectClassName("ClusterHost", "Cluster_host");
+    try expectClassName("VdiNbdServerInfo", "vdi_nbd_server_info");
+    // tricky cases not found in xenapi.json
+    try expectClassName("AB", "a__b");
+    try expectClassName("B", "b_");
+    try expectClassName("B", "_b");
+}
