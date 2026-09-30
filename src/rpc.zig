@@ -31,11 +31,11 @@ const Response = union(enum) {
     // Allocations made during this operation are not carefully tracked and may
     // not be possible to individually clean up. It is recommended to use a
     // std.heap.ArenaAllocator
-    fn parseJsonRpc(allocator: std.mem.Allocator, rpc: []const u8) !Response {
+    fn parseJsonRpc(allocator: std.mem.Allocator, payload: []const u8) !Response {
         const parsed: std.json.Value = try std.json.parseFromSliceLeaky(
             std.json.Value,
             allocator,
-            rpc,
+            payload,
             .{},
         );
 
@@ -64,14 +64,14 @@ const Response = union(enum) {
     }
 };
 
-pub const Conn = struct {
+pub const Connection = struct {
     stream: ?net.Stream = null,
     allocator: std.mem.Allocator, // This can by use to create local arena for leaky allocation
     arena: std.heap.ArenaAllocator,
     io: std.Io,
     hostname: []const u8,
 
-    pub fn open(allocator: std.mem.Allocator, io: std.Io, hostname: []const u8, port: u16) !Conn {
+    pub fn open(allocator: std.mem.Allocator, io: std.Io, hostname: []const u8, port: u16) !Connection {
         const peer = try net.IpAddress.parseIp4(hostname, port);
         const conn = try peer.connect(io, .{ .mode = .stream });
         return .{
@@ -83,7 +83,7 @@ pub const Conn = struct {
         };
     }
 
-    pub fn close(self: *Conn) void {
+    pub fn close(self: *Connection) void {
         self.arena.deinit();
         if (self.stream) |stream| {
             stream.close(self.io);
@@ -91,9 +91,9 @@ pub const Conn = struct {
     }
 };
 
-// We don't want call to be public (accessible to the end user). As Conn is public we don't
-// put it as a method of Conn. But it is public for the generated xapi.zig file.
-pub fn call(conn: *Conn, comptime RetType: type, body: []u8) !RetType {
+// We don't want call to be public (accessible to the end user). As Connection is public we don't
+// put it as a method of Connection. But it is public for the generated xapi.zig file.
+pub fn call(conn: *Connection, comptime RetType: type, body: []u8) !RetType {
     // We want to send:
     //❯ curl -v http://localhost/jsonrpc -d '{
     //    "jsonrpc":"2.0",

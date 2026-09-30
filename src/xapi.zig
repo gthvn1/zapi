@@ -14,7 +14,7 @@
 // So we need to take care that std is not declared twice. To achieve that we put
 // const std inside Class.
 const rpc = @import("rpc.zig");
-pub const Conn = rpc.Conn;
+pub const Conn = rpc.Connection;
 
 pub const Class = struct {
     const std = @import("std");

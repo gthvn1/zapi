@@ -3,6 +3,7 @@ const json = std.json;
 const Io = std.Io;
 
 const raw_api = @import("raw_xapi.zig");
+const emit = @import("emit.zig");
 
 const Args = union(enum) {
     const usage =
@@ -110,7 +111,7 @@ pub fn main(init: std.process.Init) !void {
                 .emit => {
                     // TODO: we need to call the emitter. The raw API will be passed to it and it will
                     //       use the type_parser().
-                    try stdout_writer.writeAll("TODO: emit code\n");
+                    try emit.xapi_bindings(stdout_writer);
                 },
                 .raw => try rapi.dump(stdout_writer),
             }

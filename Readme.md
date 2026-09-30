@@ -1,12 +1,13 @@
-Generates bindings for Zig following the approach introduced in [xapy](https://github.com/contificate/xapy/).
+Generates XAPI bindings for Zig following the approach introduced in [xapy](https://github.com/contificate/xapy/).
 
 - Build: `zig build`
-- Run: `./zig-out/bin/zapi xenapi.json`
+- Display XAPI classes (read from xenapi.json): `./zig-out/bin/zapi -r xenapi.json`
+- Emit the code (WIP): `./zig-out/bin/zapi -e xenapi.json > /tmp/xapi.zig && zig ast-check /tmp/xapi.zig`
 - Status
     1. [x] JSON Parse -> generic `std.json.Value`
     2. [x] Extract to IR ([raw_xapi.zig](https://github.com/gthvn1/zapi/blob/master/src/raw_xapi.zig)) -> ClassInfo/FieldInfo/MessageInfo: a domain representation that still keeps raw strings.
-    3. [x] Write `src/xapi.zig` by hand to have a working basic example that works and understand how to wire things.
-    4. [ ] Tokenize + parse type strings -> real AST for every type field, replacing the raw strings.
+    3. [x] Write `src/xapi.zig` by hand to have a working basic example to understand how to wire things.
+    4. [ ] Tokenize + parse type strings -> real AST, replacing the raw strings.
     5. [ ] Code generation -> walk the now-typed IR and emit Zig source (structs + sync call functions).
 - The pipeline is:
     - `xenapi.json -> raw_xapi (ClassInfo) -> type_parser (Zig types) -> emitter (text) -> generated xapi.zig`
@@ -42,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
 ```
 <!-- END_CODE [examples/basic.zig] -->
 
-- If you have a running XAPI, with creds, you should see:
+- If you have a running XAPI, with creds, you should see (out of date):
 <!-- BEGIN_CODE [examples/basic_output] -->
 ```
 ❯ ./zig-out/bin/basic
@@ -79,10 +80,9 @@ Access-Control-Allow-Headers: X-Requested-With
 ```
 <!-- END_CODE [examples/basic_output] -->
 
-
 # Tips
-- For testing, set up the connection using: `ssh -L 6666:<xapi-host>:80 xapi-host`
+- For testing, set up the connection using: `ssh -L 6666:localhost:80 xapi-host`
 - If you don't have a host running xapi, you can see what is sent using: `nc -kl 6666`
-- *Note*: I had an issue with `\r\n` line endings when using multiline strings.
-          To see it: `nc -kl 6666 | xxd`
+- *Note*: I had an issue with multiline strings. Zig multiline only produces `\n`, while
+          HTTP headers require `\r\n`. To see it: `nc -kl 6666 | xxd`
 - To run sandbox examples live: `cd sandbox; echo mem.zig | entr -c zig run mem.zig`
