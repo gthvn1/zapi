@@ -111,7 +111,7 @@ pub fn main(init: std.process.Init) !void {
                 .emit => {
                     // TODO: we need to call the emitter. The raw API will be passed to it and it will
                     //       use the TypeParser.
-                    try emit.xapi_bindings(stdout_writer, &rapi);
+                    try emit.xapi_bindings(gpa, stdout_writer, &rapi);
                 },
                 .raw => try rapi.dump(stdout_writer),
             }

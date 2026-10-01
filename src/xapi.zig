@@ -19,23 +19,6 @@ pub const Conn = rpc.Connection;
 pub const Class = struct {
     const std = @import("std");
 
-    fn OpaqueRef(comptime T: type) type {
-        return struct {
-            pub fn jsonParseFromValue(allocator: std.mem.Allocator, src: std.json.Value, opts: std.json.ParseOptions) !T {
-                _ = opts;
-                // We are expecting "OpaqueRef:6206e66c-9cd1-561c-1519-6ce38cd41dfe"
-                // src has been allocated from local arena, so we need to dupe
-                switch (src) {
-                    .string => |s| {
-                        std.debug.print("custom: {s}\n", .{s});
-                        return .{ .ref = try allocator.dupe(u8, s) };
-                    },
-                    else => return std.json.ParseFromValueError.UnexpectedToken,
-                }
-            }
-        };
-    }
-
     // From raw parsing we see that:
     // ClassInfo: session
     //   ...
@@ -46,7 +29,7 @@ pub const Class = struct {
     //   logout (session_id: session ref) -> void
     pub const Session = struct {
         ref: []const u8,
-        pub const jsonParseFromValue = OpaqueRef(Session).jsonParseFromValue;
+        pub const jsonParseFromValue = rpc.OpaqueRef(Session).jsonParseFromValue;
 
         pub fn login_with_password(
             conn: *Conn,
@@ -86,7 +69,7 @@ pub const Class = struct {
     //   get_name_label (session_id: session ref, self: VM ref) -> string
     pub const Vm = struct {
         ref: []const u8,
-        pub const jsonParseFromValue = OpaqueRef(Vm).jsonParseFromValue;
+        pub const jsonParseFromValue = rpc.OpaqueRef(Vm).jsonParseFromValue;
 
         pub fn get_all(conn: *Conn, session_id: Session) ![]Vm {
             const params: [1][]const u8 = .{session_id.ref};

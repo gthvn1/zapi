@@ -200,3 +200,20 @@ pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: []const 
 
     return out.toOwnedSlice();
 }
+
+pub fn OpaqueRef(comptime T: type) type {
+    return struct {
+        pub fn jsonParseFromValue(allocator: std.mem.Allocator, src: std.json.Value, opts: std.json.ParseOptions) !T {
+            _ = opts;
+            // We are expecting "OpaqueRef:6206e66c-9cd1-561c-1519-6ce38cd41dfe"
+            // src has been allocated from local arena, so we need to dupe
+            switch (src) {
+                .string => |s| {
+                    std.debug.print("custom: {s}\n", .{s});
+                    return .{ .ref = try allocator.dupe(u8, s) };
+                },
+                else => return std.json.ParseFromValueError.UnexpectedToken,
+            }
+        }
+    };
+}
