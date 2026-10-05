@@ -7,6 +7,25 @@ pub const ClassInfo = struct {
     name: []const u8,
     fields: []FieldInfo,
     messages: []MessageInfo,
+
+    // A class has a ref if one of its messages takes a parameter whose type starts with "<name> ref"
+    // (e.g. "VM ref", "VM ref set", ...).
+    // Assumptions, checked on xenapi.json (64 classes with a ref):
+    // - the ref always appears in a parameter, never only in a result;
+    // - map types like "(VDI ref -> SR ref) map" only contain refs of other classes, so they can be
+    //   ignored.
+    pub fn hasRef(self: *const ClassInfo) bool {
+        for (self.messages) |m| {
+            for (m.params) |p| {
+                var it = std.mem.splitScalar(u8, p.type, ' ');
+                if (std.mem.eql(u8, it.first(), self.name)) {
+                    const w = it.next() orelse continue;
+                    if (std.mem.eql(u8, w, "ref")) return true;
+                }
+            }
+        }
+        return false;
+    }
 };
 
 pub const FieldInfo = struct {

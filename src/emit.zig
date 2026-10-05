@@ -2,7 +2,6 @@ const std = @import("std");
 const RawXapi = @import("RawXapi.zig");
 
 pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXapi) !void {
-    _ = rapi;
     var draft: std.Io.Writer.Allocating = .init(a);
     defer draft.deinit();
 
@@ -17,13 +16,15 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
     // Starting struct Class
     try out.writeAll("pub const Class = struct {\n");
 
-    // TODO: add all classes
-    const class_arr = [_][]const u8{ "session", "VM" };
-    for (class_arr) |cname| {
-        const class_name: ClassName = .{ .raw = cname };
+    // Hint: Not all classes are real objects so some of them don't have ref.
+    //       To know if a class has a ref we can look <name> ref in its "Messages" signature.
+    for (rapi.root.items) |class_info| {
+        const class_name: ClassName = .{ .raw = class_info.name };
         try out.print("pub const {f} = struct {{\n", .{class_name});
-        try out.writeAll("ref: []const u8,\n");
-        try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
+        if (class_info.hasRef()) {
+            try out.writeAll("ref: []const u8,\n");
+            try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
+        }
         try out.writeAll("};\n");
     }
 
