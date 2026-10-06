@@ -16,11 +16,10 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
     // Starting struct Class
     try out.writeAll("pub const Class = struct {\n");
 
-    // Hint: Not all classes are real objects so some of them don't have ref.
-    //       To know if a class has a ref we can look <name> ref in its "Messages" signature.
     for (rapi.root.items) |class_info| {
         const class_name: ClassName = .{ .raw = class_info.name };
         try out.print("pub const {f} = struct {{\n", .{class_name});
+        // Only object classes (see hasRef) get a ref
         if (class_info.hasRef()) {
             try out.writeAll("ref: []const u8,\n");
             try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
@@ -44,7 +43,7 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
             var buf: [256]u8 = undefined;
             var msg: std.Io.Writer = .fixed(&buf);
             try ast.renderError(e, &msg);
-            std.log.err("generated code {d}:{d}: {s}\n", .{ loc.line + 1, loc.column + 1, msg.buffered() });
+            std.log.err("generated code {d}:{d}: {s}", .{ loc.line + 1, loc.column + 1, msg.buffered() });
         }
         return error.InvalidGeneratedCode;
     }
