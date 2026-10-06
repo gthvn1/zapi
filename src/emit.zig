@@ -1,6 +1,16 @@
 const std = @import("std");
 const RawXapi = @import("RawXapi.zig");
 
+// TODO: replace with TypeParser
+// To support basic.zig we just stub types used by the four methods.
+fn zigType(raw: []const u8) ![]const u8 {
+    if (std.mem.eql(u8, raw, "string")) return "[]const u8";
+    if (std.mem.eql(u8, raw, "session ref")) return "Session";
+    if (std.mem.eql(u8, raw, "VM ref set")) return "[]Vm";
+    if (std.mem.eql(u8, raw, "VM ref")) return "Vm";
+    return error.UnsupportedType;
+}
+
 pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXapi) !void {
     var draft: std.Io.Writer.Allocating = .init(a);
     defer draft.deinit();
