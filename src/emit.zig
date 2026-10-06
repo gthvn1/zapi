@@ -24,6 +24,24 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
             try out.writeAll("ref: []const u8,\n");
             try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
         }
+
+        // TODO: get parameters and results type from TypeParser, generate all messages
+        // Currently we want to generate the four methods used by basic.zig.
+        if (std.mem.eql(u8, "session", class_info.name)) {
+            for (class_info.messages) |m| {
+                // TODO: remove this filter once all messages are generated
+                if (std.mem.eql(u8, m.name, "login_with_password")) {
+                    try out.writeAll("// TODO: generate login_with_password\n");
+                } else if (std.mem.eql(u8, m.name, "logout")) {
+                    try out.writeAll("// TODO: generate logout\n");
+                }
+            }
+        }
+
+        if (std.mem.eql(u8, "VM", class_info.name)) {
+            try out.writeAll("// TODO: get_all and get_name_label\n");
+        }
+
         try out.writeAll("};\n");
     }
 
