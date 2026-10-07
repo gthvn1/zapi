@@ -13,24 +13,76 @@ const Stub = struct {
         return error.UnsupportedType;
     }
 
+    fn findSelf(name: []const u8, params: []const RawXapi.MessageInfoParam) ?usize {
+        // The rule to find a self parameter is:
+        // 1. if a parameter is named "self" -> This is the one
+        // 2. otherwise, the parameter type is the same as the class ref
+        // 3. otherwise null
+        for (params, 0..) |p, i| {
+            if (std.mem.eql(u8, "self", p.name)) return i;
+        }
+
+        for (params, 0..) |p, i| {
+            var ty_iter = std.mem.splitScalar(u8, p.type, ' ');
+            if (std.mem.eql(u8, name, ty_iter.first()) and std.mem.eql(u8, "ref", ty_iter.rest())) return i;
+        }
+
+        return null;
+    }
+
+    fn isRef(ty: []const u8) bool {
+        var it = std.mem.splitScalar(u8, ty, ' ');
+        _ = it.first(); // We match any classes
+        return std.mem.eql(u8, "ref", it.rest());
+    }
+
     fn genCode(ci: *const RawXapi.ClassInfo, methods: []const []const u8, w: *std.Io.Writer) !void {
         for (ci.messages) |m| {
-            // TODO: remove these filters once all messages are generated
             for (methods) |method| {
                 if (!std.mem.eql(u8, m.name, method)) continue;
 
-                try w.print("pub fn {s}(conn: *Conn,", .{m.name});
-                for (m.params) |mip| {
-                    try w.print("{s}:{s},", .{ mip.name, try Stub.zigType(mip.type) });
+                try w.print("pub fn {s}(", .{m.name});
+
+                // Params are ordered. We need to find if a parameter is the same type than
+                // ClassInfo and put it first. Then conn and then others parameters.
+
+                if (findSelf(ci.name, m.params)) |idx| {
+                    try w.print("{s}:{s},", .{ m.params[idx].name, try zigType(m.params[idx].type) });
+                    try w.writeAll("conn: *Conn,");
+                    for (m.params, 0..) |mip, i| {
+                        if (i == idx) continue;
+                        try w.print("{s}:{s},", .{ mip.name, try zigType(mip.type) });
+                    }
+                } else {
+                    try w.writeAll("conn: *Conn,");
+                    for (m.params) |mip| {
+                        try w.print("{s}:{s},", .{ mip.name, try zigType(mip.type) });
+                    }
                 }
                 try w.writeAll(") ");
-                try w.print("!{s} {{\n", .{try Stub.zigType(m.result)});
-                // Fake body for now
-                try w.writeAll("_ = conn;\n");
+                try w.print("!{s} {{\n", .{try zigType(m.result)});
+
+                // BODY
+                // 1. declare params
+                try w.print("const params: [{d}][]const u8 = .{{", .{m.params.len});
                 for (m.params) |mip| {
-                    try w.print("_ = {s};\n", .{mip.name});
+                    if (isRef(mip.type)) {
+                        try w.print("{s}.ref,", .{mip.name});
+                    } else {
+                        try w.print("{s},", .{mip.name});
+                    }
                 }
-                try w.writeAll("@panic(\"TODO\");\n");
+                try w.writeAll("};\n");
+                // 2. rpc
+                try w.print(
+                    "const body = try rpc.writeRequest(conn.allocator, \"{s}.{s}\", &params, 1);\n",
+                    .{ ci.name, m.name },
+                );
+                // 3. free things
+                try w.writeAll("defer conn.allocator.free(body);\n");
+                // 4. and the call
+                try w.print("return rpc.call(conn, {s}, body);\n", .{try zigType(m.result)});
+
                 try w.writeAll("}\n");
             }
         }
@@ -61,7 +113,6 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
             try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
         }
 
-        // TODO: get parameters and results type from TypeParser, generate all messages
         // Currently we want to generate the four methods used by basic.zig.
         if (std.mem.eql(u8, "session", class_info.name)) {
             try Stub.genCode(class_info, &[_][]const u8{ "login_with_password", "logout" }, out);
