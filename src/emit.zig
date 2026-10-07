@@ -1,16 +1,41 @@
 const std = @import("std");
 const RawXapi = @import("RawXapi.zig");
 
-// TODO: replace with TypeParser
-// To support basic.zig we just stub types used by the four methods.
-fn zigType(raw: []const u8) ![]const u8 {
-    if (std.mem.eql(u8, raw, "string")) return "[]const u8";
-    if (std.mem.eql(u8, raw, "session ref")) return "Session";
-    if (std.mem.eql(u8, raw, "VM ref set")) return "[]Vm";
-    if (std.mem.eql(u8, raw, "VM ref")) return "Vm";
-    if (std.mem.eql(u8, raw, "void")) return "void";
-    return error.UnsupportedType;
-}
+const Stub = struct {
+    // TODO: replace with TypeParser
+    // To support basic.zig we just stub types used by the four methods.
+    fn zigType(raw: []const u8) ![]const u8 {
+        if (std.mem.eql(u8, raw, "string")) return "[]const u8";
+        if (std.mem.eql(u8, raw, "session ref")) return "Session";
+        if (std.mem.eql(u8, raw, "VM ref set")) return "[]Vm";
+        if (std.mem.eql(u8, raw, "VM ref")) return "Vm";
+        if (std.mem.eql(u8, raw, "void")) return "void";
+        return error.UnsupportedType;
+    }
+
+    fn genCode(ci: *const RawXapi.ClassInfo, methods: []const []const u8, w: *std.Io.Writer) !void {
+        for (ci.messages) |m| {
+            // TODO: remove these filters once all messages are generated
+            for (methods) |method| {
+                if (!std.mem.eql(u8, m.name, method)) continue;
+
+                try w.print("pub fn {s}(conn: *Conn,", .{m.name});
+                for (m.params) |mip| {
+                    try w.print("{s}:{s},", .{ mip.name, try Stub.zigType(mip.type) });
+                }
+                try w.writeAll(") ");
+                try w.print("!{s} {{\n", .{try Stub.zigType(m.result)});
+                // Fake body for now
+                try w.writeAll("_ = conn;\n");
+                for (m.params) |mip| {
+                    try w.print("_ = {s};\n", .{mip.name});
+                }
+                try w.writeAll("@panic(\"TODO\");\n");
+                try w.writeAll("}\n");
+            }
+        }
+    }
+};
 
 pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXapi) !void {
     var draft: std.Io.Writer.Allocating = .init(a);
@@ -27,7 +52,7 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
     // Starting struct Class
     try out.writeAll("pub const Class = struct {\n");
 
-    for (rapi.root.items) |class_info| {
+    for (rapi.root.items) |*class_info| {
         const class_name: ClassName = .{ .raw = class_info.name };
         try out.print("pub const {f} = struct {{\n", .{class_name});
         // Only object classes (see hasRef) get a ref
@@ -39,20 +64,11 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
         // TODO: get parameters and results type from TypeParser, generate all messages
         // Currently we want to generate the four methods used by basic.zig.
         if (std.mem.eql(u8, "session", class_info.name)) {
-            for (class_info.messages) |m| {
-                // TODO: remove this filter once all messages are generated
-                if (std.mem.eql(u8, m.name, "login_with_password") or std.mem.eql(u8, m.name, "logout")) {
-                    try out.print("// TODO: generate {s}\n", .{m.name});
-                    for (m.params) |mip| {
-                        try out.print("//   params {s} {s}\n", .{ mip.name, try zigType(mip.type) });
-                    }
-                    try out.print("//   Returns {s} \n", .{try zigType(m.result)});
-                }
-            }
+            try Stub.genCode(class_info, &[_][]const u8{ "login_with_password", "logout" }, out);
         }
 
         if (std.mem.eql(u8, "VM", class_info.name)) {
-            try out.writeAll("// TODO: get_all and get_name_label\n");
+            try Stub.genCode(class_info, &[_][]const u8{ "get_all", "get_name_label" }, out);
         }
 
         try out.writeAll("};\n");
@@ -69,6 +85,7 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
     defer ast.deinit(a);
 
     if (ast.errors.len > 0) {
+        try w.writeAll(source);
         for (ast.errors) |e| {
             const loc = ast.tokenLocation(0, e.token);
             var buf: [256]u8 = undefined;
