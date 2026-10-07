@@ -108,11 +108,7 @@ pub fn main(init: std.process.Init) !void {
             // After parse() we have classes, messages and types available)
 
             switch (mode) {
-                .emit => {
-                    // TODO: we need to call the emitter. The raw API will be passed to it and it will
-                    //       use the TypeParser.
-                    try emit.xapi_bindings(gpa, stdout_writer, &rapi);
-                },
+                .emit => try emit.xapi_bindings(gpa, stdout_writer, &rapi),
                 .raw => try rapi.dump(stdout_writer),
             }
         },
