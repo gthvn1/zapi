@@ -8,6 +8,7 @@ fn zigType(raw: []const u8) ![]const u8 {
     if (std.mem.eql(u8, raw, "session ref")) return "Session";
     if (std.mem.eql(u8, raw, "VM ref set")) return "[]Vm";
     if (std.mem.eql(u8, raw, "VM ref")) return "Vm";
+    if (std.mem.eql(u8, raw, "void")) return "void";
     return error.UnsupportedType;
 }
 
@@ -40,10 +41,12 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
         if (std.mem.eql(u8, "session", class_info.name)) {
             for (class_info.messages) |m| {
                 // TODO: remove this filter once all messages are generated
-                if (std.mem.eql(u8, m.name, "login_with_password")) {
-                    try out.writeAll("// TODO: generate login_with_password\n");
-                } else if (std.mem.eql(u8, m.name, "logout")) {
-                    try out.writeAll("// TODO: generate logout\n");
+                if (std.mem.eql(u8, m.name, "login_with_password") or std.mem.eql(u8, m.name, "logout")) {
+                    try out.print("// TODO: generate {s}\n", .{m.name});
+                    for (m.params) |mip| {
+                        try out.print("//   params {s} {s}\n", .{ mip.name, try zigType(mip.type) });
+                    }
+                    try out.print("//   Returns {s} \n", .{try zigType(m.result)});
                 }
             }
         }
