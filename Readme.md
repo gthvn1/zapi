@@ -22,7 +22,17 @@ const xapi = @import("xapi");
 const IPADDR = "127.0.0.1";
 const PORT = 6666;
 
+pub const std_options: std.Options = .{
+    // Use .level = .info to disable debug message
+    .log_scope_levels = &.{.{ .scope = .xapirpc, .level = .debug }},
+};
+
 pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_file_writer: std.Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
+    const w = &stdout_file_writer.interface;
+
     const Session = xapi.Class.Session;
     const Vm = xapi.Class.Vm;
 
@@ -30,15 +40,16 @@ pub fn main(init: std.process.Init) !void {
     defer conn.close();
 
     const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "gthvn1_test");
-    defer session.logout(&conn) catch std.debug.print("Failed to logout\n", .{});
+    defer session.logout(&conn) catch std.log.err("Failed to logout\n", .{});
 
     const vms = try Vm.get_all(&conn, session);
     for (vms) |vm| {
         const name = try vm.get_name_label(&conn, session);
-        std.debug.print("- {s}\n", .{name});
+        try w.print("- {s}\n", .{name});
     }
 
-    std.debug.print("Basic done\n", .{});
+    try w.writeAll("Basic done\n");
+    try w.flush();
 }
 ```
 <!-- END_CODE [examples/basic.zig] -->
@@ -46,37 +57,46 @@ pub fn main(init: std.process.Init) !void {
 - If you have a running XAPI, with creds, you should see (out of date):
 <!-- BEGIN_CODE [examples/basic_output] -->
 ```
-❯ ./zig-out/bin/basic
-= Header begin =
-HTTP/1.1 200 OK
-content-length: 82
-connection: keep-alive
-cache-control: no-cache, no-store
-content-type: application/json
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Headers: X-Requested-With
-
-
-= Header end =
-= Body begin =
-{"jsonrpc":"2.0","result":"OpaqueRef:74f6c79a-667f-1d96-8db5-dd9d7f61798c","id":1}
-= Body end =
-custom: OpaqueRef:74f6c79a-667f-1d96-8db5-dd9d7f61798c
+- Windows Server 2022 (64-bit)
+- Ubuntu Focal Fossa 20.04 (deprecated)
+- Red Hat Enterprise Linux 9
+- Red Hat Enterprise Linux 8
+- Rocky Linux 9
+- AlmaLinux 10
+- Generic Linux UEFI
+- Scientific Linux 7 (deprecated)
+- Red Hat Enterprise Linux 10
+- Ubuntu Jammy Jellyfish 22.04
+- Oracle Linux 10
+- AlmaLinux 8
+- Oracle Linux 9
+- CentOS Stream 9
+- Red Hat Enterprise Linux 7 (deprecated)
+- Rocky Linux 10
+- Windows 10 (64-bit)
+- Gooroom Platform 2.0
+- SUSE Linux Enterprise 15 (64-bit)
+- Ubuntu Noble Numbat 24.04
+- Generic Linux BIOS
+- Debian Buster 10 (deprecated)
+- Windows 11
+- SUSE Linux Enterprise Server 12 SP5 (64-bit)
+- CentOS Stream 8
+- Windows Server 2019 (64-bit)
+- Windows Server 2016 (64-bit)
+- Debian Trixie 13
+- CentOS 7 (deprecated)
+- Oracle Linux 7 (deprecated)
+- Debian Bookworm 12
+- Windows Server 2025
+- AlmaLinux 9
+- Rocky Linux 8
+- Debian Bullseye 11
+- Control domain on host: xcp-host-01
+- CentOS Stream 10
+- Other install media
+- Oracle Linux 8
 Basic done
-= Header begin =
-HTTP/1.1 200 OK
-content-length: 36
-connection: keep-alive
-cache-control: no-cache, no-store
-content-type: application/json
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Headers: X-Requested-With
-
-
-= Header end =
-= Body begin =
-{"jsonrpc":"2.0","result":"","id":1}
-= Body end =
 ```
 <!-- END_CODE [examples/basic_output] -->
 

@@ -3,6 +3,8 @@ const rpc = struct {
     const std = @import("std");
     const net = std.Io.net;
 
+    const log = std.log.scoped(.xapirpc);
+
     const Response = union(enum) {
         ok: std.json.Value,
         not_ok: struct { code: i64, message: []const u8, data: std.json.Value },
@@ -140,7 +142,7 @@ const rpc = struct {
             // Check if we are at the end of the header that is "\r\n";
             if (bytes_read == 1) break;
         }
-        std.debug.print("= Header begin =\n{s}\n= Header end =\n", .{resp_header.written()});
+        log.debug("= Header begin =\n{s}\n= Header end =", .{resp_header.written()});
 
         // We should have the header now, let's check the content-length
         var it = std.http.HeaderIterator.init(resp_header.written());
@@ -160,7 +162,7 @@ const rpc = struct {
 
         try r.interface.streamExact(&resp_content.writer, len);
 
-        std.debug.print("= Body begin =\n{s}\n= Body end =\n", .{resp_content.written()});
+        log.debug("= Body begin =\n{s}\n= Body end =", .{resp_content.written()});
 
         // TODO: extract information from response if type is not void
 
@@ -170,7 +172,7 @@ const rpc = struct {
         const result = switch (response) {
             .ok => |v| v,
             .not_ok => |e| {
-                std.debug.print("Got error {d}:{s}\n", .{ e.code, e.message });
+                log.debug("Got error {d}:{s}", .{ e.code, e.message });
                 return error.CallFailed;
             },
         };
@@ -211,7 +213,7 @@ const rpc = struct {
                 // src has been allocated from local arena, so we need to dupe
                 switch (src) {
                     .string => |s| {
-                        std.debug.print("custom: {s}\n", .{s});
+                        log.debug("custom: {s}", .{s});
                         return .{ .ref = try allocator.dupe(u8, s) };
                     },
                     else => return std.json.ParseFromValueError.UnexpectedToken,
