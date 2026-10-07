@@ -16,6 +16,16 @@ pub fn build(b: *std.Build) void {
     // exe is the artifact of the compilation, we need to add a relation with install step.
     b.installArtifact(exe);
 
+    // We want to generate the xapi bindings
+    const gen_xapi_bindings = b.addRunArtifact(exe);
+    gen_xapi_bindings.addArg("-e");
+    gen_xapi_bindings.addFileArg(b.path("xenapi.json"));
+    // XAPI bindings are generated on stdout.
+    const gen_out = gen_xapi_bindings.captureStdOut(.{});
+    // Add it to the path read by basic.zig
+    const source_files = b.addUpdateSourceFiles();
+    source_files.addCopyFileToSource(gen_out, "generated/xapi.zig");
+
     // We can now do: zig build --watch --summary all
     // and run it: ./zig-out/bin/zapi
 
@@ -49,7 +59,7 @@ pub fn build(b: *std.Build) void {
     // We create a module for the xapi file. This file will be
     // used by the examples.
     const xapi_mod = b.createModule(.{
-        .root_source_file = b.path("src/xapi.zig"),
+        .root_source_file = b.path("generated/xapi.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -63,6 +73,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     basic_exe.root_module.addImport("xapi", xapi_mod);
+    basic_exe.step.dependOn(&source_files.step);
     b.installArtifact(basic_exe);
 
     // Update the Readme.md if basic.zig is build
@@ -74,6 +85,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+
     const run_gen = b.addRunArtifact(gen_readme);
     run_gen.addArg("Readme.md");
     // Only run gen_readme if basic_exe compiles.
