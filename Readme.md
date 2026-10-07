@@ -40,7 +40,7 @@ pub fn main(init: std.process.Init) !void {
     defer conn.close();
 
     const session = try Session.login_with_password(&conn, "root", "pass", "1.0", "gthvn1_test");
-    defer session.logout(&conn) catch std.log.err("Failed to logout\n", .{});
+    defer session.logout(&conn) catch std.log.err("Failed to logout", .{});
 
     const vms = try Vm.get_all(&conn, session);
     for (vms) |vm| {
