@@ -273,3 +273,5 @@ Memory: everything returned lives in `conn.arena` until `conn.close()`.
 - XAPI error code and message are lost (`error.CallFailed`).
 - two odd types exist in xenapi.json: field event.snapshot has type
   "<class> record" and event.from returns "an event batch".
+- some parameters are not required. The idiomatic Zig way is to use an opts
+  struct at the end of the parameters. It can be `.{}`.
