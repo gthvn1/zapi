@@ -2,7 +2,7 @@ const std = @import("std");
 const RawXapi = @import("RawXapi.zig");
 const TypeParser = @import("TypeParser.zig");
 
-fn findSelf(name: []const u8, params: []const RawXapi.MessageInfoParam) ?usize {
+fn findSelf(tp: *TypeParser, name: []const u8, params: []const RawXapi.MessageInfoParam) !?usize {
     // The rule to find a self parameter is:
     // 1. if a parameter is named "self" -> This is the one
     // 2. otherwise, the parameter type is the same as the class ref
@@ -12,8 +12,8 @@ fn findSelf(name: []const u8, params: []const RawXapi.MessageInfoParam) ?usize {
     }
 
     for (params, 0..) |p, i| {
-        var ty_iter = std.mem.splitScalar(u8, p.type, ' ');
-        if (std.mem.eql(u8, name, ty_iter.first()) and std.mem.eql(u8, "ref", ty_iter.rest())) return i;
+        const p_ty = try tp.parse(p.type);
+        if (p_ty == .ref and std.mem.eql(u8, name, p_ty.ref)) return i;
     }
 
     return null;
@@ -54,7 +54,7 @@ fn genCode(tp: *TypeParser, ci: *const RawXapi.ClassInfo, methods: []const []con
 
             // Params are ordered. We need to find if a parameter is the same type than
             // ClassInfo and put it first. Then conn and then others parameters.
-            if (findSelf(ci.name, m.params)) |idx| {
+            if (try findSelf(tp, ci.name, m.params)) |idx| {
                 const ty = try tp.parse(m.params[idx].type);
 
                 //try w.print("{s}:{s},", .{ m.params[idx].name, try Stub.zigType(m.params[idx].type) });
