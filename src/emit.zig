@@ -54,10 +54,10 @@ fn genCode(tp: *TypeParser, ci: *const RawXapi.ClassInfo, methods: []const []con
 
             // Params are ordered. We need to find if a parameter is the same type than
             // ClassInfo and put it first. Then conn and then others parameters.
+            // See findSelf for rules.
             if (try findSelf(tp, ci.name, m.params)) |idx| {
                 const ty = try tp.parse(m.params[idx].type);
 
-                //try w.print("{s}:{s},", .{ m.params[idx].name, try Stub.zigType(m.params[idx].type) });
                 try w.print("{s}:", .{m.params[idx].name});
                 try writeZigType(w, &ty);
                 try w.writeAll(",conn: *Conn,");
@@ -86,13 +86,14 @@ fn genCode(tp: *TypeParser, ci: *const RawXapi.ClassInfo, methods: []const []con
 
             // BODY
             // 1. declare params
+            // TODO: currently we are only accepting string ([]const u8) but we probably want
+            //       to pass a tuple (anonymous struct).
             try w.print("const params: [{d}][]const u8 = .{{", .{m.params.len});
             for (m.params) |mip| {
-                const mip_ty = try tp.parse(mip.type);
-                if (mip_ty == .ref) {
-                    try w.print("{s}.ref,", .{mip.name});
-                } else {
-                    try w.print("{s},", .{mip.name});
+                switch (try tp.parse(mip.type)) {
+                    .ref => try w.print("{s}.ref,", .{mip.name}),
+                    .string => try w.print("{s},", .{mip.name}),
+                    else => return error.ParamsHasUnsupportedType,
                 }
             }
             try w.writeAll("};\n");
