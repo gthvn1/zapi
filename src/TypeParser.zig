@@ -64,7 +64,7 @@ pub fn deinit(self: *Self) void {
     self.arena.deinit();
 }
 
-pub fn parseType(self: *Self, input: []const u8) !AstNode {
+pub fn parse(self: *Self, input: []const u8) !AstNode {
     const a = self.arena.allocator();
 
     if (std.mem.eql(u8, input, "string")) return .string;
@@ -83,11 +83,11 @@ pub fn parseType(self: *Self, input: []const u8) !AstNode {
             return .{ .record = input[0..idx] };
         } else if (std.mem.eql(u8, input[idx + 1 ..], "set")) {
             const ast_node = try a.create(AstNode);
-            ast_node.* = try self.parseType(input[0..idx]);
+            ast_node.* = try self.parse(input[0..idx]);
             return .{ .set = ast_node };
         } else if (std.mem.eql(u8, input[idx + 1 ..], "option")) {
             const ast_node = try a.create(AstNode);
-            ast_node.* = try self.parseType(input[0..idx]);
+            ast_node.* = try self.parse(input[0..idx]);
             return .{ .option = ast_node };
         } else if (std.mem.eql(u8, input[idx + 1 ..], "map")) {
             @panic("TODO: map");
@@ -110,7 +110,7 @@ test "test simple cases" {
 
     try std.testing.expectEqual(
         AstNode.bool,
-        try tp.parseType("bool"),
+        try tp.parse("bool"),
     );
 }
 
@@ -120,7 +120,7 @@ test "test postfix cases" {
 
     try std.testing.expectEqualDeep(
         AstNode{ .option = &AstNode{ .string = {} } },
-        try tp.parseType("string option"),
+        try tp.parse("string option"),
     );
 }
 
@@ -130,7 +130,7 @@ test "test prefix cases" {
 
     try std.testing.expectEqualDeep(
         AstNode{ .@"enum" = "task_allowed_operations" },
-        try tp.parseType("enum task_allowed_operations"),
+        try tp.parse("enum task_allowed_operations"),
     );
 }
 
@@ -140,7 +140,7 @@ test "test complex cases" {
 
     try std.testing.expectEqualDeep(
         AstNode{ .set = &AstNode{ .@"enum" = "after_apply_guidance" } },
-        try tp.parseType("enum after_apply_guidance set"),
+        try tp.parse("enum after_apply_guidance set"),
     );
 }
 
@@ -150,26 +150,26 @@ test "test basic.zig cases" {
 
     try std.testing.expectEqual(
         AstNode.string,
-        try tp.parseType("string"),
+        try tp.parse("string"),
     );
 
     try std.testing.expectEqualDeep(
         AstNode{ .ref = "session" },
-        try tp.parseType("session ref"),
+        try tp.parse("session ref"),
     );
 
     try std.testing.expectEqualDeep(
         AstNode{ .ref = "VM" },
-        try tp.parseType("VM ref"),
+        try tp.parse("VM ref"),
     );
 
     try std.testing.expectEqualDeep(
         AstNode{ .set = &AstNode{ .ref = "VM" } },
-        try tp.parseType("VM ref set"),
+        try tp.parse("VM ref set"),
     );
 
     try std.testing.expectEqual(
         AstNode.void,
-        try tp.parseType("void"),
+        try tp.parse("void"),
     );
 }

@@ -1,99 +1,125 @@
 const std = @import("std");
 const RawXapi = @import("RawXapi.zig");
+const TypeParser = @import("TypeParser.zig");
 
-const Stub = struct {
-    // TODO: replace with TypeParser
-    // To support basic.zig we just stub types used by the four methods.
-    fn zigType(raw: []const u8) ![]const u8 {
-        if (std.mem.eql(u8, raw, "string")) return "[]const u8";
-        if (std.mem.eql(u8, raw, "session ref")) return "Session";
-        if (std.mem.eql(u8, raw, "VM ref set")) return "[]Vm";
-        if (std.mem.eql(u8, raw, "VM ref")) return "Vm";
-        if (std.mem.eql(u8, raw, "void")) return "void";
-        return error.UnsupportedType;
+fn findSelf(name: []const u8, params: []const RawXapi.MessageInfoParam) ?usize {
+    // The rule to find a self parameter is:
+    // 1. if a parameter is named "self" -> This is the one
+    // 2. otherwise, the parameter type is the same as the class ref
+    // 3. otherwise null
+    for (params, 0..) |p, i| {
+        if (std.mem.eql(u8, "self", p.name)) return i;
     }
 
-    fn findSelf(name: []const u8, params: []const RawXapi.MessageInfoParam) ?usize {
-        // The rule to find a self parameter is:
-        // 1. if a parameter is named "self" -> This is the one
-        // 2. otherwise, the parameter type is the same as the class ref
-        // 3. otherwise null
-        for (params, 0..) |p, i| {
-            if (std.mem.eql(u8, "self", p.name)) return i;
-        }
-
-        for (params, 0..) |p, i| {
-            var ty_iter = std.mem.splitScalar(u8, p.type, ' ');
-            if (std.mem.eql(u8, name, ty_iter.first()) and std.mem.eql(u8, "ref", ty_iter.rest())) return i;
-        }
-
-        return null;
+    for (params, 0..) |p, i| {
+        var ty_iter = std.mem.splitScalar(u8, p.type, ' ');
+        if (std.mem.eql(u8, name, ty_iter.first()) and std.mem.eql(u8, "ref", ty_iter.rest())) return i;
     }
 
-    fn isRef(ty: []const u8) bool {
-        var it = std.mem.splitScalar(u8, ty, ' ');
-        _ = it.first(); // We match any classes
-        return std.mem.eql(u8, "ref", it.rest());
+    return null;
+}
+
+fn writeZigType(w: *std.Io.Writer, node: *const TypeParser.AstNode) !void {
+    switch (node.*) {
+        .string => try w.writeAll("[]const u8"),
+        .int => try w.writeAll("i64"),
+        .float => try w.writeAll("f64"),
+        .bool => try w.writeAll("bool"),
+        .datetime => return error.DateTimeNotSupported,
+        .void => try w.writeAll("void"),
+        .ref => |str| {
+            const cn = ClassName{ .raw = str };
+            try w.print("{f}", .{cn});
+        },
+        .record => return error.RecordNotSupported,
+        .set => |sub_node| {
+            try w.writeAll("[]");
+            try writeZigType(w, sub_node);
+        },
+        .option => |sub_node| {
+            try w.writeAll("?");
+            try writeZigType(w, sub_node);
+        },
+        .map => return error.MapNotSupported,
+        .@"enum" => return error.EnumNotSupported,
     }
+}
 
-    fn genCode(ci: *const RawXapi.ClassInfo, methods: []const []const u8, w: *std.Io.Writer) !void {
-        for (ci.messages) |m| {
-            for (methods) |method| {
-                if (!std.mem.eql(u8, m.name, method)) continue;
+fn genCode(tp: *TypeParser, ci: *const RawXapi.ClassInfo, methods: []const []const u8, w: *std.Io.Writer) !void {
+    for (ci.messages) |m| {
+        for (methods) |method| {
+            if (!std.mem.eql(u8, m.name, method)) continue;
 
-                try w.print("pub fn {s}(", .{m.name});
+            try w.print("pub fn {s}(", .{m.name});
 
-                // Params are ordered. We need to find if a parameter is the same type than
-                // ClassInfo and put it first. Then conn and then others parameters.
+            // Params are ordered. We need to find if a parameter is the same type than
+            // ClassInfo and put it first. Then conn and then others parameters.
+            if (findSelf(ci.name, m.params)) |idx| {
+                const ty = try tp.parse(m.params[idx].type);
 
-                if (findSelf(ci.name, m.params)) |idx| {
-                    try w.print("{s}:{s},", .{ m.params[idx].name, try zigType(m.params[idx].type) });
-                    try w.writeAll("conn: *Conn,");
-                    for (m.params, 0..) |mip, i| {
-                        if (i == idx) continue;
-                        try w.print("{s}:{s},", .{ mip.name, try zigType(mip.type) });
-                    }
-                } else {
-                    try w.writeAll("conn: *Conn,");
-                    for (m.params) |mip| {
-                        try w.print("{s}:{s},", .{ mip.name, try zigType(mip.type) });
-                    }
+                //try w.print("{s}:{s},", .{ m.params[idx].name, try Stub.zigType(m.params[idx].type) });
+                try w.print("{s}:", .{m.params[idx].name});
+                try writeZigType(w, &ty);
+                try w.writeAll(",conn: *Conn,");
+                for (m.params, 0..) |mip, i| {
+                    if (i == idx) continue;
+                    const mip_ty = try tp.parse(mip.type);
+                    try w.print("{s}:", .{mip.name});
+                    try writeZigType(w, &mip_ty);
+                    try w.writeAll(",");
                 }
-                try w.writeAll(") ");
-                try w.print("!{s} {{\n", .{try zigType(m.result)});
-
-                // BODY
-                // 1. declare params
-                try w.print("const params: [{d}][]const u8 = .{{", .{m.params.len});
+            } else {
+                try w.writeAll("conn: *Conn,");
                 for (m.params) |mip| {
-                    if (isRef(mip.type)) {
-                        try w.print("{s}.ref,", .{mip.name});
-                    } else {
-                        try w.print("{s},", .{mip.name});
-                    }
+                    const mip_ty = try tp.parse(mip.type);
+                    try w.print("{s}:", .{mip.name});
+                    try writeZigType(w, &mip_ty);
+                    try w.writeAll(",");
                 }
-                try w.writeAll("};\n");
-                // 2. rpc
-                try w.print(
-                    "const body = try rpc.writeRequest(conn.allocator, \"{s}.{s}\", &params, 1);\n",
-                    .{ ci.name, m.name },
-                );
-                // 3. free things
-                try w.writeAll("defer conn.allocator.free(body);\n");
-                // 4. and the call
-                try w.print("return rpc.call(conn, {s}, body);\n", .{try zigType(m.result)});
-
-                try w.writeAll("}\n");
             }
+
+            const res_ty = try tp.parse(m.result);
+
+            try w.writeAll(") !"); // All functions can fail, so always add !
+            try writeZigType(w, &res_ty);
+            try w.writeAll("{\n");
+
+            // BODY
+            // 1. declare params
+            try w.print("const params: [{d}][]const u8 = .{{", .{m.params.len});
+            for (m.params) |mip| {
+                const mip_ty = try tp.parse(mip.type);
+                if (mip_ty == .ref) {
+                    try w.print("{s}.ref,", .{mip.name});
+                } else {
+                    try w.print("{s},", .{mip.name});
+                }
+            }
+            try w.writeAll("};\n");
+            // 2. rpc
+            try w.print(
+                "const body = try rpc.writeRequest(conn.allocator, \"{s}.{s}\", &params, 1);\n",
+                .{ ci.name, m.name },
+            );
+            // 3. free things
+            try w.writeAll("defer conn.allocator.free(body);\n");
+            // 4. and the call
+            try w.writeAll("return rpc.call(conn, ");
+            try writeZigType(w, &res_ty);
+            try w.writeAll(", body);\n");
+
+            try w.writeAll("}\n");
         }
     }
-};
+}
 
 pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXapi) !void {
     var draft: std.Io.Writer.Allocating = .init(a);
     defer draft.deinit();
-
     const out = &draft.writer;
+
+    var tp = TypeParser.init(a);
+    defer tp.deinit();
 
     // First we generate the header comment
     try out.writeAll("// This file is automatically generated\n");
@@ -113,13 +139,14 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
             try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
         }
 
-        // Currently we want to generate the four methods used by basic.zig.
+        // TODO: Currently we want to generate the four methods used by basic.zig.
+        //       Remove the filter when everything is generated automatically.
         if (std.mem.eql(u8, "session", class_info.name)) {
-            try Stub.genCode(class_info, &[_][]const u8{ "login_with_password", "logout" }, out);
+            try genCode(&tp, class_info, &[_][]const u8{ "login_with_password", "logout" }, out);
         }
 
         if (std.mem.eql(u8, "VM", class_info.name)) {
-            try Stub.genCode(class_info, &[_][]const u8{ "get_all", "get_name_label" }, out);
+            try genCode(&tp, class_info, &[_][]const u8{ "get_all", "get_name_label" }, out);
         }
 
         try out.writeAll("};\n");
