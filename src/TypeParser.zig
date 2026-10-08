@@ -109,19 +109,14 @@ test "test simple cases" {
     defer tp.deinit();
 
     try std.testing.expectEqual(
-        AstNode.string,
-        try tp.parseType("string"),
+        AstNode.bool,
+        try tp.parseType("bool"),
     );
 }
 
 test "test postfix cases" {
     var tp = Self.init(std.testing.allocator);
     defer tp.deinit();
-
-    try std.testing.expectEqualDeep(
-        AstNode{ .ref = "session" },
-        try tp.parseType("session ref"),
-    );
 
     try std.testing.expectEqualDeep(
         AstNode{ .option = &AstNode{ .string = {} } },
@@ -136,5 +131,35 @@ test "test prefix cases" {
     try std.testing.expectEqualDeep(
         AstNode{ .@"enum" = "task_allowed_operations" },
         try tp.parseType("enum task_allowed_operations"),
+    );
+}
+
+test "test basic.zig cases" {
+    var tp = Self.init(std.testing.allocator);
+    defer tp.deinit();
+
+    try std.testing.expectEqual(
+        AstNode.string,
+        try tp.parseType("string"),
+    );
+
+    try std.testing.expectEqualDeep(
+        AstNode{ .ref = "session" },
+        try tp.parseType("session ref"),
+    );
+
+    try std.testing.expectEqualDeep(
+        AstNode{ .ref = "VM" },
+        try tp.parseType("VM ref"),
+    );
+
+    try std.testing.expectEqualDeep(
+        AstNode{ .set = &AstNode{ .ref = "VM" } },
+        try tp.parseType("VM ref set"),
+    );
+
+    try std.testing.expectEqual(
+        AstNode.void,
+        try tp.parseType("void"),
     );
 }
