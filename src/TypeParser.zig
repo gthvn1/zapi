@@ -94,14 +94,14 @@ pub fn parseType(self: *Self, input: []const u8) !AstNode {
         }
     }
 
-    // If it is not basicn and not postfix type, check prefix
+    // If it is not basic and not postfix type, check prefix
     if (std.mem.findScalar(u8, input, ' ')) |idx| {
         if (std.mem.eql(u8, input[0..idx], "enum")) {
             return .{ .@"enum" = input[idx + 1 ..] };
         }
     }
 
-    return error.unknownType;
+    return error.UnknownType;
 }
 
 test "test simple cases" {
@@ -131,6 +131,16 @@ test "test prefix cases" {
     try std.testing.expectEqualDeep(
         AstNode{ .@"enum" = "task_allowed_operations" },
         try tp.parseType("enum task_allowed_operations"),
+    );
+}
+
+test "test complex cases" {
+    var tp = Self.init(std.testing.allocator);
+    defer tp.deinit();
+
+    try std.testing.expectEqualDeep(
+        AstNode{ .set = &AstNode{ .@"enum" = "after_apply_guidance" } },
+        try tp.parseType("enum after_apply_guidance set"),
     );
 }
 
