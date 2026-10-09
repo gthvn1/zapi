@@ -127,6 +127,7 @@ For each class it writes:
     pub const Vm = struct {
         ref: []const u8,                                   // only if hasRef()
         pub const jsonParseFromValue = rpc.OpaqueRef(Vm).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vm).jsonStringify;
         ... functions ...
     };
 
@@ -150,11 +151,7 @@ b) the SIGNATURE: self first, then `conn`, then the other params. Each type
        .set child  -> [] + child     ("VM ref set" -> []Vm)
        .option     -> ? + child
 
-c) the BODY: the params array in XAPI order (NOT the signature order):
-
-       .ref    -> name.ref
-       .string -> name
-       other   -> error (not supported yet)
+c) the BODY: the params tuple in XAPI order (NOT the signature order):
 
 Result, in generated/xapi.zig:
 
@@ -163,11 +160,11 @@ Result, in generated/xapi.zig:
         conn: *Conn,
         session_id: Session,
     ) ![]const u8 {
-        const params: [2][]const u8 = .{
+        const params = .{
             session_id.ref,
             self.ref,
         };
-        const body = try rpc.writeRequest(conn.allocator, "VM.get_name_label", &params, 1);
+        const body = try rpc.writeRequest(conn.allocator, "VM.get_name_label", params, 1);
         defer conn.allocator.free(body);
         return rpc.call(conn, []const u8, body);
     }
