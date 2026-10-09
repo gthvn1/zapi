@@ -1,9 +1,12 @@
 # How zapi works
 
-This document follows ONE example from start to end: the XAPI message
+This document follows one example from start to end: the XAPI message
 `VM.get_name_label`. At each step it shows the real value we have at that
 point. There is no abstraction: if you get lost, find the step and look at
 the value.
+
+Formatting convention: file names, Zig code and function names are in
+`backticks`; XAPI type strings and JSON values are in "double quotes".
 
 The pipeline is:
 
@@ -21,15 +24,14 @@ The pipeline is:
 
 Two programs are involved, keep them apart in your head:
 
-- the GENERATOR (`zapi`, src/main.zig + emit.zig ...) runs at build time and
-  WRITES text.
-- the GENERATED CODE (generated/xapi.zig) is compiled into basic.zig and
-  RUNS against a real XAPI.
-
+- the generator (`zapi`, `src/main.zig` + `src/emit.zig` ...) runs at build
+  time and writes text.
+- the generated code (`generated/xapi.zig`) is compiled into
+  `examples/basic.zig` and runs against a real XAPI.
 
 ## Step 1 - The JSON (xenapi.json)
 
-xenapi.json is an array of classes. Inside the class "VM", in "messages",
+`xenapi.json` is an array of classes. Inside the class "VM", in "messages",
 there is this entry (fields we don't use are removed):
 
     {
@@ -43,9 +45,8 @@ there is this entry (fields we don't use are removed):
 
 Notes:
 
-- types are plain TEXT: "session ref", "VM ref", "string".
+- types are plain text: "session ref", "VM ref", "string".
 - "result" is an array; we only keep the first element (the type).
-
 
 ## Step 2 - RawXapi (src/RawXapi.zig)
 
@@ -67,7 +68,7 @@ small structs. For our message we get:
       result = "string"
     }
 
-Types are STILL text here. RawXapi does not understand them.
+Types are still text here. `RawXapi` does not understand them.
 
 `ClassInfo.hasRef()` answers: "is VM a real object with a ref?". It looks
 for a parameter whose type is "VM ref" (or "VM ref set", ...) in the VM
@@ -77,11 +78,10 @@ You can see this step with:
 
     ./zig-out/bin/zapi -r xenapi.json
 
-
 ## Step 3 - TypeParser (src/TypeParser.zig)
 
 `TypeParser.parse(text)` turns a type text into a small tree (`AstNode`).
-The tree says WHAT the type is. It contains no Zig text and no JSON text.
+The tree says what the type is. It contains no Zig code and no JSON text.
 
 For our message:
 
@@ -89,34 +89,35 @@ For our message:
     "VM ref"       ->  .{ .ref = "VM" }
     "string"       ->  .string
 
-A more nested example, "VM ref set" (used by VM.get_all):
+A more nested example, "VM ref set" (used by `VM.get_all`):
 
     set
      `-- ref "VM"
 
-How the parser reads it: look at the LAST word.
+### How the parser reads it
+
+It looks at the last word.
 
 - "set" is a postfix keyword: it is a set of ... the rest, "VM ref".
 - in "VM ref", the last word is "ref": it is a ref to class "VM".
 
 Rules (in this order):
 
-1. the whole text is a builtin (string, int, float, bool, datetime, void)
-   -> leaf with no payload.
-2. the last word is ref / record -> leaf holding the class name.
-3. the last word is set / option -> node with ONE child: parse the rest.
-4. the first word is enum -> leaf holding the enum name.
+1. the whole text is a builtin ("string", "int", "float", "bool",
+   "datetime", "void") -> leaf with no payload.
+2. the last word is "ref" / "record" -> leaf holding the class name.
+3. the last word is "set" / "option" -> node with ONE child: parse the rest.
+4. the first word is "enum" -> leaf holding the enum name.
 5. otherwise -> error.
 
 Postfix is checked before prefix, so "enum foo set" gives `set -> enum "foo"`.
 
-The tree keeps the XAPI names ("VM"). Turning "VM" into "Vm" is not the
+The tree keeps the XAPI names ("VM"). Turning "VM" into `Vm` is not the
 parser's job.
-
 
 ## Step 4 - The emitter (src/emit.zig)
 
-The emitter writes Zig TEXT into an in-memory buffer (the "draft"). At the
+The emitter writes Zig code into an in-memory buffer (the "draft"). At the
 end it parses the draft with `std.zig.Ast.parse()`:
 
 - if there are syntax errors, it logs them and fails;
@@ -131,29 +132,31 @@ For each class it writes:
         ... functions ...
     };
 
-The class name "VM" becomes "Vm" with the `ClassName` formatter
-(`{f}` in print): split on '_', uppercase the first letter of each part,
-lowercase the rest. "VM_group" -> "VmGroup".
+The class name "VM" becomes `Vm` with the `ClassName` formatter
+(`{f}` in `print`): split on '_', uppercase the first letter of each part,
+lowercase the rest. "VM_group" -> `VmGroup`.
 
 For our message, the emitter does:
 
-a) `findSelf()` finds which parameter plays the role of `self`:
+a) `findSelf()` finds which parameter plays the role of `self`. Rules are:
    1. a parameter named "self"            -> index 1 here
-   2. else the first param of type "<class> ref" (for session.logout this is
-      session_id)
-   3. else null (static function, like get_all)
+   2. else the first param of type "<class> ref" (for `session.logout` this
+      is `session_id`)
+   3. else null (static function, like `get_all`)
 
-b) the SIGNATURE: self first, then `conn`, then the other params. Each type
-   is parsed (step 3) then written with `writeZigType()`:
+b) the signature: `self` first, then `conn`, then the other params. Each
+   type is parsed (step 3) then written with `writeZigType()`:
 
        .string     -> []const u8
        .ref "VM"   -> Vm             (via ClassName)
        .set child  -> [] + child     ("VM ref set" -> []Vm)
        .option     -> ? + child
 
-c) the BODY: the params tuple in XAPI order (NOT the signature order):
+c) the body: `params` is a tuple that contains the values themselves, in
+   XAPI order (NOT the signature order). Each value knows how to write
+   itself to JSON (a string as itself, a class through `jsonStringify`).
 
-Result, in generated/xapi.zig:
+Result, in `generated/xapi.zig`:
 
     pub fn get_name_label(
         self: Vm,
@@ -161,8 +164,8 @@ Result, in generated/xapi.zig:
         session_id: Session,
     ) ![]const u8 {
         const params = .{
-            session_id.ref,
-            self.ref,
+            session_id,
+            self,
         };
         const body = try rpc.writeRequest(conn.allocator, "VM.get_name_label", params, 1);
         defer conn.allocator.free(body);
@@ -183,30 +186,31 @@ The generated file also contains, before `Class`:
 
 `rpc` is not pub: users cannot call `rpc.call` directly. `Conn` is pub.
 
-
 ## Step 5 - The build (build.zig)
 
 `zig build` does, in order:
 
 1. compile `zapi` (the generator).
 2. run `zapi -e xenapi.json`, capture stdout.
-3. copy that output to generated/xapi.zig (in the repo).
-4. compile examples/basic.zig with `@import("xapi")` = generated/xapi.zig.
+3. copy that output to `generated/xapi.zig` (in the repo).
+4. compile `examples/basic.zig` with `@import("xapi")` =
+   `generated/xapi.zig`.
 
-So generated/xapi.zig is always up to date, and it is the exact file a user
-could copy into their project.
-
+So `generated/xapi.zig` is always up to date, and it is the exact file a
+user could copy into their project.
 
 ## Step 6 - At runtime (code from src/rpc.zig)
 
-In basic.zig:
+In `examples/basic.zig`:
 
     const name = try vm.get_name_label(&conn, session);
 
 Suppose `vm.ref` is "OpaqueRef:1111" and `session.ref` is "OpaqueRef:2222"
 (real refs are longer UUIDs).
 
-6a) `rpc.writeRequest()` builds the JSON body with `std.json.Stringify`:
+6a) `rpc.writeRequest()` builds the JSON body with `std.json.Stringify`.
+`Stringify` sees that `Vm` has a `jsonStringify` method and calls it; it
+writes `self.ref`.
 
     {"jsonrpc":"2.0","method":"VM.get_name_label",
      "params":["OpaqueRef:2222","OpaqueRef:1111"],"id":1}
@@ -230,13 +234,13 @@ checks for an "error" field. Here there is none, so we keep:
 
     result = .{ .string = "Debian Bookworm 12" }
 
-6e) `std.json.parseFromValueLeaky(RetType, ...)` converts that Value into
-the Zig type the generated function asked for. Here RetType is
+6e) `std.json.parseFromValueLeaky(RetType, ...)` converts that `Value` into
+the Zig type the generated function asked for. Here `RetType` is
 `[]const u8`, so we get the string "Debian Bookworm 12" (copied into
-conn.arena, so it stays valid after call() returns).
+`conn.arena`, so it stays valid after `call()` returns).
 
-How does std.json know what to do? `RetType` is known at COMPILE time
-(`comptime RetType: type`). std.json looks at the type with `@typeInfo`
+How does `std.json` know what to do? `RetType` is known at compile time
+(`comptime RetType: type`). `std.json` looks at the type with `@typeInfo`
 and generates the right conversion:
 
     []const u8      expects a JSON string, copies it
@@ -246,29 +250,22 @@ and generates the right conversion:
                     it expects a JSON string and returns .{ .ref = <copy> }
     void            nothing to convert (call() returns early)
 
-For VM.get_all (RetType = []Vm) the response is:
+For `VM.get_all` (`RetType` = `[]Vm`) the response is:
 
     {"result":["OpaqueRef:1111","OpaqueRef:3333",...]}
 
-and std.json calls Vm.jsonParseFromValue once per string, giving a slice
-of Vm, each with its own `.ref`.
+and `std.json` calls `Vm.jsonParseFromValue` once per string, giving a
+slice of `Vm`, each with its own `.ref`.
 
 Memory: everything returned lives in `conn.arena` until `conn.close()`.
 
-
 ## Not done yet (the next steps)
 
-- params are `[]const u8` only, so only `string` and `X ref` parameters
-  work. Plan: pass a tuple `.{ session_id, self, value }` to writeRequest
-  (received as `params: anytype`). std.json.Stringify writes any Zig value
-  (numbers, bools, slices ...) by looking at its type at compile time,
-  exactly like 6e but in the other direction. Classes would get a
-  `jsonStringify` method that writes only their `.ref` string.
-- TypeParser does not handle `map` yet: "(K -> V) map", nested parens.
-- `record`, `enum`, `datetime`, `map` are not rendered to Zig yet.
-- only 4 messages are generated (filter in xapi_bindings).
+- `TypeParser` does not handle "map" yet: "(K -> V) map", nested parens.
+- "record", "enum", "datetime", "map" are not rendered to Zig yet.
+- only 4 messages are generated (filter in `xapi_bindings`).
 - XAPI error code and message are lost (`error.CallFailed`).
-- two odd types exist in xenapi.json: field event.snapshot has type
-  "<class> record" and event.from returns "an event batch".
-- some parameters are not required. The idiomatic Zig way is to use an opts
-  struct at the end of the parameters. It can be `.{}`.
+- two odd types exist in `xenapi.json`: field `event.snapshot` has type
+  "<class> record" and `event.from` returns "an event batch".
+- some parameters are not required. The idiomatic Zig way is to use an
+  opts struct at the end of the parameters. It can be `.{}`.
