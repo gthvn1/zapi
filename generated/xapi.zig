@@ -183,8 +183,11 @@ const rpc = struct {
         return try std.json.parseFromValueLeaky(RetType, conn.arena.allocator(), result, .{});
     }
 
-    pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
+    pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: anytype, id: usize) ![]u8 {
         var out: std.Io.Writer.Allocating = .init(gpa);
+        // Only deinit on error. On success the buffer is passed to caller through toOwnedSlice.
+        errdefer out.deinit();
+
         var w: std.json.Stringify = .{ .writer = &out.writer };
 
         try w.beginObject();
@@ -193,13 +196,9 @@ const rpc = struct {
         try w.objectField("method");
         try w.write(method);
         try w.objectField("params");
-        try w.beginArray();
-        for (params) |param| {
-            try w.write(param);
-        }
-        try w.endArray();
+        try w.write(params);
         try w.objectField("id");
-        try w.print("{}", .{id});
+        try w.write(id);
         try w.endObject();
 
         return out.toOwnedSlice();
@@ -213,11 +212,14 @@ const rpc = struct {
                 // src has been allocated from local arena, so we need to dupe
                 switch (src) {
                     .string => |s| {
-                        log.debug("custom: {s}", .{s});
                         return .{ .ref = try allocator.dupe(u8, s) };
                     },
                     else => return std.json.ParseFromValueError.UnexpectedToken,
                 }
+            }
+
+            pub fn jsonStringify(self: T, jws: anytype) !void {
+                try jws.write(self.ref);
             }
         };
     }
@@ -228,14 +230,15 @@ pub const Class = struct {
     pub const Session = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Session).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Session).jsonStringify;
         pub fn logout(
             session_id: Session,
             conn: *Conn,
         ) !void {
-            const params: [1][]const u8 = .{
-                session_id.ref,
+            const params = .{
+                session_id,
             };
-            const body = try rpc.writeRequest(conn.allocator, "session.logout", &params, 1);
+            const body = try rpc.writeRequest(conn.allocator, "session.logout", params, 1);
             defer conn.allocator.free(body);
             return rpc.call(conn, void, body);
         }
@@ -246,13 +249,13 @@ pub const Class = struct {
             version: []const u8,
             originator: []const u8,
         ) !Session {
-            const params: [4][]const u8 = .{
+            const params = .{
                 uname,
                 pwd,
                 version,
                 originator,
             };
-            const body = try rpc.writeRequest(conn.allocator, "session.login_with_password", &params, 1);
+            const body = try rpc.writeRequest(conn.allocator, "session.login_with_password", params, 1);
             defer conn.allocator.free(body);
             return rpc.call(conn, Session, body);
         }
@@ -261,39 +264,46 @@ pub const Class = struct {
     pub const Subject = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Subject).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Subject).jsonStringify;
     };
     pub const Role = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Role).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Role).jsonStringify;
     };
     pub const Task = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Task).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Task).jsonStringify;
     };
     pub const Event = struct {};
     pub const Pool = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pool).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pool).jsonStringify;
     };
     pub const PoolPatch = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PoolPatch).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PoolPatch).jsonStringify;
     };
     pub const PoolUpdate = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PoolUpdate).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PoolUpdate).jsonStringify;
     };
     pub const Vm = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vm).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vm).jsonStringify;
         pub fn get_all(
             conn: *Conn,
             session_id: Session,
         ) ![]Vm {
-            const params: [1][]const u8 = .{
-                session_id.ref,
+            const params = .{
+                session_id,
             };
-            const body = try rpc.writeRequest(conn.allocator, "VM.get_all", &params, 1);
+            const body = try rpc.writeRequest(conn.allocator, "VM.get_all", params, 1);
             defer conn.allocator.free(body);
             return rpc.call(conn, []Vm, body);
         }
@@ -302,11 +312,11 @@ pub const Class = struct {
             conn: *Conn,
             session_id: Session,
         ) ![]const u8 {
-            const params: [2][]const u8 = .{
-                session_id.ref,
-                self.ref,
+            const params = .{
+                session_id,
+                self,
             };
-            const body = try rpc.writeRequest(conn.allocator, "VM.get_name_label", &params, 1);
+            const body = try rpc.writeRequest(conn.allocator, "VM.get_name_label", params, 1);
             defer conn.allocator.free(body);
             return rpc.call(conn, []const u8, body);
         }
@@ -314,229 +324,285 @@ pub const Class = struct {
     pub const VmMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VmMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VmMetrics).jsonStringify;
     };
     pub const VmGuestMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VmGuestMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VmGuestMetrics).jsonStringify;
     };
     pub const Vmpp = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vmpp).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vmpp).jsonStringify;
     };
     pub const Vmss = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vmss).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vmss).jsonStringify;
     };
     pub const VmAppliance = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VmAppliance).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VmAppliance).jsonStringify;
     };
     pub const DrTask = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(DrTask).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(DrTask).jsonStringify;
     };
     pub const Host = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Host).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Host).jsonStringify;
     };
     pub const HostCrashdump = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(HostCrashdump).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(HostCrashdump).jsonStringify;
     };
     pub const HostPatch = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(HostPatch).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(HostPatch).jsonStringify;
     };
     pub const HostMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(HostMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(HostMetrics).jsonStringify;
     };
     pub const HostCpu = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(HostCpu).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(HostCpu).jsonStringify;
     };
     pub const Network = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Network).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Network).jsonStringify;
     };
     pub const Vif = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vif).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vif).jsonStringify;
     };
     pub const VifMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VifMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VifMetrics).jsonStringify;
     };
     pub const Pif = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pif).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pif).jsonStringify;
     };
     pub const PifMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PifMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PifMetrics).jsonStringify;
     };
     pub const Bond = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Bond).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Bond).jsonStringify;
     };
     pub const Vlan = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vlan).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vlan).jsonStringify;
     };
     pub const Sm = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Sm).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Sm).jsonStringify;
     };
     pub const Sr = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Sr).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Sr).jsonStringify;
     };
     pub const SrStat = struct {};
     pub const ProbeResult = struct {};
     pub const Lvhd = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Lvhd).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Lvhd).jsonStringify;
     };
     pub const Vdi = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vdi).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vdi).jsonStringify;
     };
     pub const Vbd = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vbd).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vbd).jsonStringify;
     };
     pub const VbdMetrics = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VbdMetrics).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VbdMetrics).jsonStringify;
     };
     pub const Pbd = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pbd).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pbd).jsonStringify;
     };
     pub const Crashdump = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Crashdump).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Crashdump).jsonStringify;
     };
     pub const Vtpm = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vtpm).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vtpm).jsonStringify;
     };
     pub const Console = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Console).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Console).jsonStringify;
     };
     pub const User = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(User).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(User).jsonStringify;
     };
     pub const DataSource = struct {};
     pub const Blob = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Blob).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Blob).jsonStringify;
     };
     pub const Message = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Message).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Message).jsonStringify;
     };
     pub const Secret = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Secret).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Secret).jsonStringify;
     };
     pub const Tunnel = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Tunnel).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Tunnel).jsonStringify;
     };
     pub const NetworkSriov = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(NetworkSriov).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(NetworkSriov).jsonStringify;
     };
     pub const Pci = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pci).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pci).jsonStringify;
     };
     pub const Pgpu = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pgpu).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pgpu).jsonStringify;
     };
     pub const GpuGroup = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(GpuGroup).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(GpuGroup).jsonStringify;
     };
     pub const Vgpu = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vgpu).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vgpu).jsonStringify;
     };
     pub const VgpuType = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VgpuType).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VgpuType).jsonStringify;
     };
     pub const PvsSite = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PvsSite).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PvsSite).jsonStringify;
     };
     pub const PvsServer = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PvsServer).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PvsServer).jsonStringify;
     };
     pub const PvsProxy = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PvsProxy).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PvsProxy).jsonStringify;
     };
     pub const PvsCacheStorage = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(PvsCacheStorage).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(PvsCacheStorage).jsonStringify;
     };
     pub const Feature = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Feature).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Feature).jsonStringify;
     };
     pub const SdnController = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(SdnController).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(SdnController).jsonStringify;
     };
     pub const VdiNbdServerInfo = struct {};
     pub const Pusb = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Pusb).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Pusb).jsonStringify;
     };
     pub const UsbGroup = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(UsbGroup).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(UsbGroup).jsonStringify;
     };
     pub const Vusb = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Vusb).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Vusb).jsonStringify;
     };
     pub const Cluster = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Cluster).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Cluster).jsonStringify;
     };
     pub const ClusterHost = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(ClusterHost).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(ClusterHost).jsonStringify;
     };
     pub const Certificate = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Certificate).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Certificate).jsonStringify;
     };
     pub const Repository = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Repository).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Repository).jsonStringify;
     };
     pub const Observer = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(Observer).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(Observer).jsonStringify;
     };
     pub const VmGroup = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(VmGroup).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(VmGroup).jsonStringify;
     };
     pub const HostDriver = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(HostDriver).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(HostDriver).jsonStringify;
     };
     pub const DriverVariant = struct {
         ref: []const u8,
         pub const jsonParseFromValue = rpc.OpaqueRef(DriverVariant).jsonParseFromValue;
+        pub const jsonStringify = rpc.OpaqueRef(DriverVariant).jsonStringify;
     };
 };

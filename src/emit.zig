@@ -86,20 +86,14 @@ fn genCode(tp: *TypeParser, ci: *const RawXapi.ClassInfo, methods: []const []con
 
             // BODY
             // 1. declare params
-            // TODO: currently we are only accepting string ([]const u8) but we probably want
-            //       to pass a tuple (anonymous struct).
-            try w.print("const params: [{d}][]const u8 = .{{", .{m.params.len});
+            try w.writeAll("const params = .{");
             for (m.params) |mip| {
-                switch (try tp.parse(mip.type)) {
-                    .ref => try w.print("{s}.ref,", .{mip.name}),
-                    .string => try w.print("{s},", .{mip.name}),
-                    else => return error.ParamsHasUnsupportedType,
-                }
+                try w.print("{s},", .{mip.name});
             }
             try w.writeAll("};\n");
             // 2. rpc
             try w.print(
-                "const body = try rpc.writeRequest(conn.allocator, \"{s}.{s}\", &params, 1);\n",
+                "const body = try rpc.writeRequest(conn.allocator, \"{s}.{s}\", params, 1);\n",
                 .{ ci.name, m.name },
             );
             // 3. free things
@@ -138,6 +132,7 @@ pub fn xapi_bindings(a: std.mem.Allocator, w: *std.Io.Writer, rapi: *const RawXa
         if (class_info.hasRef()) {
             try out.writeAll("ref: []const u8,\n");
             try out.print("pub const jsonParseFromValue = rpc.OpaqueRef({f}).jsonParseFromValue;\n", .{class_name});
+            try out.print("pub const jsonStringify = rpc.OpaqueRef({f}).jsonStringify;\n", .{class_name});
         }
 
         // TODO: Currently we want to generate the four methods used by basic.zig.

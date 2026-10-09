@@ -181,8 +181,11 @@ pub fn call(conn: *Connection, comptime RetType: type, body: []u8) !RetType {
     return try std.json.parseFromValueLeaky(RetType, conn.arena.allocator(), result, .{});
 }
 
-pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: []const []const u8, id: usize) ![]u8 {
+pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: anytype, id: usize) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);
+    // Only deinit on error. On success the buffer is passed to caller through toOwnedSlice.
+    errdefer out.deinit();
+
     var w: std.json.Stringify = .{ .writer = &out.writer };
 
     try w.beginObject();
@@ -191,13 +194,9 @@ pub fn writeRequest(gpa: std.mem.Allocator, method: []const u8, params: []const 
     try w.objectField("method");
     try w.write(method);
     try w.objectField("params");
-    try w.beginArray();
-    for (params) |param| {
-        try w.write(param);
-    }
-    try w.endArray();
+    try w.write(params);
     try w.objectField("id");
-    try w.print("{}", .{id});
+    try w.write(id);
     try w.endObject();
 
     return out.toOwnedSlice();
@@ -211,11 +210,14 @@ pub fn OpaqueRef(comptime T: type) type {
             // src has been allocated from local arena, so we need to dupe
             switch (src) {
                 .string => |s| {
-                    log.debug("custom: {s}", .{s});
                     return .{ .ref = try allocator.dupe(u8, s) };
                 },
                 else => return std.json.ParseFromValueError.UnexpectedToken,
             }
+        }
+
+        pub fn jsonStringify(self: T, jws: anytype) !void {
+            try jws.write(self.ref);
         }
     };
 }
